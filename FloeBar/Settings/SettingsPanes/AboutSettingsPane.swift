@@ -16,6 +16,7 @@ struct AboutSettingsPane: View {
 
     /// The upstream project FloeBar is derived from.
     private var upstreamURL: URL {
+        // swiftlint:disable:next force_unwrapping
         URL(string: "https://github.com/jordanbaird/Ice")!
     }
 
