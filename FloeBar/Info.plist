@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- FloeBar does not yet ship its own Sparkle update feed. The upstream Ice
+	     feed and signing key were intentionally removed so FloeBar can never pull
+	     down and overwrite itself with an official Ice release. Add a FloeBar
+	     SUFeedURL and SUPublicEDKey here to re-enable in-app updates. -->
+</dict>
+</plist>

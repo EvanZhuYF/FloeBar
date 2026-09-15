@@ -1,0 +1,13 @@
+.DS_Store
+build/
+xcuserdata/
+
+# Build/CI artifacts and local outputs are not part of the source.
+*.xcuserstate
+
+# Tests and test tooling are kept out of the public source tree.
+Tests/
+Scripts/test-*.sh
+
+# Upstream demo media / design source (large binaries, not needed to build).
+Resources/
