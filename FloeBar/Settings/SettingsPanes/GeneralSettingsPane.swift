@@ -11,28 +11,9 @@ struct GeneralSettingsPane: View {
     @State private var isImportingCustomIceIcon = false
     @State private var isPresentingError = false
     @State private var presentedError: LocalizedErrorWrapper?
-    @State private var isApplyingOffset = false
-    @State private var tempItemSpacingOffset: CGFloat = 0 // Temporary state for the slider
 
     private var manager: GeneralSettingsManager {
         appState.settingsManager.generalSettingsManager
-    }
-
-    private var itemSpacingOffset: LocalizedStringKey {
-        localizedOffsetString(for: manager.itemSpacingOffset)
-    }
-
-    private func localizedOffsetString(for offset: CGFloat) -> LocalizedStringKey {
-        switch offset {
-        case -16:
-            return LocalizedStringKey("none")
-        case 0:
-            return LocalizedStringKey("default")
-        case 16:
-            return LocalizedStringKey("max")
-        default:
-            return LocalizedStringKey(offset.formatted())
-        }
     }
 
     private var rehideIntervalKey: LocalizedStringKey {
@@ -43,14 +24,6 @@ struct GeneralSettingsPane: View {
             String(localized: "seconds")
         }
         return LocalizedStringKey(formatted + " " + unit)
-    }
-
-    private var hasSpacingSliderValueChanged: Bool {
-        tempItemSpacingOffset != manager.itemSpacingOffset
-    }
-
-    private var isActualOffsetDifferentFromDefault: Bool {
-        manager.itemSpacingOffset != 0
     }
 
     var body: some View {
@@ -71,9 +44,6 @@ struct GeneralSettingsPane: View {
             }
             IceSection {
                 autoRehideOptions
-            }
-            IceSection {
-                spacingOptions
             }
         }
         .alert(isPresented: $isPresentingError, error: presentedError) {
@@ -216,65 +186,6 @@ struct GeneralSettingsPane: View {
     }
 
     @ViewBuilder
-    private var spacingOptions: some View {
-        IceLabeledContent {
-            IceSlider(
-                localizedOffsetString(for: tempItemSpacingOffset),
-                value: $tempItemSpacingOffset,
-                in: -16...16,
-                step: 2
-            )
-            .disabled(isApplyingOffset)
-        } label: {
-            IceLabeledContent {
-                Button("Apply") {
-                    applyOffset()
-                }
-                .help("Apply the current spacing")
-                .disabled(isApplyingOffset || !hasSpacingSliderValueChanged)
-
-                if isApplyingOffset {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .scaleEffect(0.5)
-                        .frame(width: 15, height: 15)
-                } else {
-                    Button {
-                        resetOffsetToDefault()
-                    } label: {
-                        Image(systemName: "arrow.counterclockwise.circle.fill")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Reset to the default spacing")
-                    .disabled(isApplyingOffset || !isActualOffsetDifferentFromDefault)
-                }
-            } label: {
-                HStack {
-                    Text("Menu bar item spacing")
-                    BetaBadge()
-                }
-            }
-        }
-        .annotation(
-            "Applying this setting will relaunch all apps with menu bar items. Some apps may need to be manually relaunched.",
-            spacing: 2
-        )
-        .annotation(spacing: 10, font: .callout.bold()) {
-            IceGroupBox {
-                Label {
-                    Text("Note: You may need to log out and back in for this setting to apply properly.")
-                } icon: {
-                    Image(systemName: "exclamationmark.circle")
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .onAppear {
-            tempItemSpacingOffset = manager.itemSpacingOffset
-        }
-    }
-
-    @ViewBuilder
     private var rehideStrategyPicker: some View {
         IcePicker("Strategy", selection: manager.bindings.rehideStrategy) {
             ForEach(RehideStrategy.allCases) { strategy in
@@ -311,28 +222,6 @@ struct GeneralSettingsPane: View {
                 rehideStrategyPicker
             }
         }
-    }
-
-    /// Apply menu bar spacing offset.
-    private func applyOffset() {
-        isApplyingOffset = true
-        manager.itemSpacingOffset = tempItemSpacingOffset
-        Task {
-            do {
-                try await appState.spacingManager.applyOffset()
-            } catch {
-                let alert = NSAlert(error: error)
-                alert.runModal()
-            }
-            isApplyingOffset = false
-        }
-    }
-
-    /// Reset menu bar spacing offset to default.
-    private func resetOffsetToDefault() {
-        tempItemSpacingOffset = 0
-        manager.itemSpacingOffset = tempItemSpacingOffset
-        applyOffset()
     }
 }
 

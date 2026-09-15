@@ -39,9 +39,6 @@ final class AppState: ObservableObject {
     /// Global cache for menu bar item images.
     private(set) lazy var imageCache = MenuBarItemImageCache(appState: self)
 
-    /// Manager for menu bar item spacing.
-    let spacingManager = MenuBarItemSpacingManager()
-
     /// Model for app-wide navigation.
     let navigationState = AppNavigationState()
 

@@ -181,16 +181,6 @@
         }
       }
     },
-    "Apply": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "应用"
-          }
-        }
-      }
-    },
     "Apply different settings based on the current system appearance": {
       "localizations": {
         "zh-Hans": {
@@ -207,26 +197,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "让图标跟随系统主题"
-          }
-        }
-      }
-    },
-    "Apply the current spacing": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "应用当前间距"
-          }
-        }
-      }
-    },
-    "Applying this setting will relaunch all apps with menu bar items. Some apps may need to be manually relaunched.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "应用此设置将重新启动所有包含菜单栏项目的 App。部分 App 可能需要手动重新启动。"
           }
         }
       }
@@ -1031,16 +1001,6 @@
         }
       }
     },
-    "Menu bar item spacing": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "菜单栏项目间距"
-          }
-        }
-      }
-    },
     "Menu bar items are rehidden after a fixed amount of time": {
       "localizations": {
         "zh-Hans": {
@@ -1127,16 +1087,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "空间不足，无法显示“%@”"
-          }
-        }
-      }
-    },
-    "Note: You may need to log out and back in for this setting to apply properly.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "注意：可能需要注销并重新登录，此设置才能正确生效。"
           }
         }
       }
@@ -1297,16 +1247,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "重置"
-          }
-        }
-      }
-    },
-    "Reset to the default spacing": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "恢复默认间距"
           }
         }
       }
@@ -1811,16 +1751,6 @@
         }
       }
     },
-    "default": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "默认"
-          }
-        }
-      }
-    },
     "left click": {
       "localizations": {
         "zh-Hans": {
@@ -1837,26 +1767,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "macOS 禁止移动“%@”。"
-          }
-        }
-      }
-    },
-    "max": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最大"
-          }
-        }
-      }
-    },
-    "none": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无"
           }
         }
       }

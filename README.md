@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="Ice/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width=180 height=180>
+    <img src="FloeBar/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width=180 height=180>
     <h1>FloeBar</h1>
     <p><b>A lightweight, native-feeling menu bar manager for macOS.</b></p>
 </div>
@@ -97,7 +97,6 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 - [x] Hide application menus when they overlap shown items
 - [x] Drag-and-drop layout editor
 - [x] Show hidden items in a separate bar (handy for notch MacBooks)
-- [x] Menu bar item spacing (beta)
 
 ### Menu bar appearance
 
@@ -115,6 +114,27 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 - [x] Launch at login
 
 ## Install
+
+### Download a release
+
+Grab the latest build from the [Releases page](https://github.com/EvanZhuYF/FloeBar/releases/latest):
+
+- **`FloeBar-1.0.0-universal.zip`** — runs on any supported Mac (Apple Silicon + Intel). Pick this if unsure.
+- **`FloeBar-1.0.0-arm64.zip`** — smaller, Apple Silicon only.
+
+Unzip it and move `FloeBar.app` into `/Applications`. The release builds are
+ad-hoc signed (not notarized), so on first launch macOS may block the app —
+right-click it and choose **Open**, or run:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/FloeBar.app
+```
+
+You can verify a download against `SHA256SUMS.txt` from the release:
+
+```sh
+shasum -a 256 -c SHA256SUMS.txt
+```
 
 ### Build from source
 

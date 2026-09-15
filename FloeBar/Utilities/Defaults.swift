@@ -147,7 +147,6 @@ extension Defaults {
         case showOnClick = "ShowOnClick"
         case showOnHover = "ShowOnHover"
         case showOnScroll = "ShowOnScroll"
-        case itemSpacingOffset = "ItemSpacingOffset"
         case autoRehide = "AutoRehide"
         case rehideStrategy = "RehideStrategy"
         case rehideInterval = "RehideInterval"
