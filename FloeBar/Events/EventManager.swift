@@ -269,9 +269,14 @@ extension EventManager {
     private func handleShowRightClickMenu() {
         guard
             let appState,
-            isMouseInsideEmptyMenuBarSpace,
             let mouseLocation = MouseCursor.location(in: .appKit)
         else {
+            return
+        }
+        // A visible FloeBar icon presents its own Settings/Quit menu. Only
+        // handle the empty-space fallback here when that icon is hidden.
+        let iconIsHidden = !appState.settingsManager.generalSettingsManager.showIceIcon
+        guard iconIsHidden, isMouseInsideEmptyMenuBarSpace else {
             return
         }
         appState.menuBarManager.showRightClickMenu(at: mouseLocation)
