@@ -525,8 +525,10 @@ extension MenuBarItemManager {
                 return nil
             }
             observations.append(.init(
-                identity: identity, windowID: item.windowID,
-                processID: item.ownerPID, section: section
+                identity: identity,
+                windowID: item.windowID,
+                processID: item.ownerPID,
+                section: section
             ))
         }
         return observations
@@ -1751,8 +1753,10 @@ extension MenuBarItemManager {
             }
         }
         tempShownItemContexts.append(TempShownItemContext(
-            info: item.info, returnDestination: destination,
-            originalSection: originalSection, shownInterfaceWindow: nil
+            info: item.info,
+            returnDestination: destination,
+            originalSection: originalSection,
+            shownInterfaceWindow: nil
         ))
         isTemporarilyShowingItem = true
 

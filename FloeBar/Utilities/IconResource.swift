@@ -17,8 +17,7 @@ enum IconResource: Hashable {
     @ViewBuilder
     var view: some View {
         image
-            .resizable()
-            .aspectRatio(contentMode: .fit)
+            .resizable().scaledToFit()
     }
 
     /// The image produced by the resource.

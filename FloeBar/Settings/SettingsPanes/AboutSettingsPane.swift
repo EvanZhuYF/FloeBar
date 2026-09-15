@@ -16,7 +16,6 @@ struct AboutSettingsPane: View {
 
     /// The upstream project FloeBar is derived from.
     private var upstreamURL: URL {
-        // swiftlint:disable:next force_unwrapping
         URL(string: "https://github.com/jordanbaird/Ice")!
     }
 
@@ -28,8 +27,7 @@ struct AboutSettingsPane: View {
         HStack {
             if let nsImage = NSImage(named: NSImage.applicationIconName) {
                 Image(nsImage: nsImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .resizable().scaledToFit()
                     .frame(width: minFrameDimension / 1.5)
             }
 

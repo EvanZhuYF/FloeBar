@@ -47,8 +47,7 @@ struct PermissionsView: View {
         } icon: {
             if let nsImage = NSImage(named: NSImage.applicationIconName) {
                 Image(nsImage: nsImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .resizable().scaledToFit()
                     .frame(width: 75, height: 75)
             }
         }
