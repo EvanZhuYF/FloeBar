@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>FloeBar</title>
+        <link>https://evanzhuyf.github.io/FloeBar/appcast.xml</link>
+        <description>Most recent updates to FloeBar.</description>
+        <language>en</language>
+        <!--
+            Update items are managed by Scripts/release.sh. The newest release
+            is inserted at the top of the channel. Each item's enclosure carries
+            the EdDSA signature and byte length produced by Sparkle's
+            sign_update tool. Do not hand-edit signatures.
+
+            The item below is a placeholder describing the required shape; it is
+            replaced on the first real release. It intentionally has no valid
+            edSignature so it will not be offered as an update.
+        -->
+        <item>
+            <title>1.0.0</title>
+            <sparkle:version>1206</sparkle:version>
+            <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <pubDate>Mon, 15 Sep 2026 00:00:00 +0000</pubDate>
+            <enclosure
+                url="https://github.com/EvanZhuYF/FloeBar/releases/download/v1.0.0/FloeBar-1.0.0-universal.zip"
+                sparkle:edSignature="PLACEHOLDER_NOT_A_VALID_SIGNATURE"
+                length="0"
+                type="application/octet-stream" />
+        </item>
+    </channel>
+</rss>

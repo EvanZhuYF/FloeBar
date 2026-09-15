@@ -2,9 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- FloeBar does not yet ship its own Sparkle update feed. The upstream Ice
-	     feed and signing key were intentionally removed so FloeBar can never pull
-	     down and overwrite itself with an official Ice release. Add a FloeBar
-	     SUFeedURL and SUPublicEDKey here to re-enable in-app updates. -->
+	<!-- Sparkle in-app updates. FloeBar ships its own feed (never the upstream
+	     Ice feed) so it can never pull down and overwrite itself with an
+	     official Ice release. The appcast is hosted on GitHub Pages. -->
+	<key>SUFeedURL</key>
+	<string>https://evanzhuyf.github.io/FloeBar/appcast.xml</string>
+	<!-- EdDSA (ed25519) public key used to verify update archives. The matching
+	     private key lives in the maintainer's login keychain (generated once with
+	     Sparkle's generate_keys) and must never be committed. -->
+	<key>SUPublicEDKey</key>
+	<string>PiCdzxrKScfAhnVlSF9BtvyC9znZoeXxkWxREdW5S7w=</string>
+	<!-- Allow Sparkle to check automatically once the user has been prompted. -->
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 </dict>
 </plist>
