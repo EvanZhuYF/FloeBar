@@ -5,10 +5,15 @@ APP="${1:?Pass the built FloeBar.app path}"
 LANGUAGE="${2:-en}"
 TEMP_DIR="$(mktemp -d)"
 PID=""
+COPY=""
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 cleanup() {
     if [[ -n "$PID" ]]; then
         kill "$PID" 2>/dev/null || true
         wait "$PID" 2>/dev/null || true
+    fi
+    if [[ -n "$COPY" && -d "$COPY" ]]; then
+        "$LSREGISTER" -u "$COPY" >/dev/null 2>&1 || true
     fi
     rm -rf "$TEMP_DIR"
 }
