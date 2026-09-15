@@ -1,5 +1,5 @@
 included:
-  - Ice
+  - FloeBar
 
 disabled_rules:
   - cyclomatic_complexity
@@ -56,7 +56,7 @@ file_header:
   required_pattern: |
     //
     //  SWIFTLINT_CURRENT_FILENAME
-    //  Ice
+    //  FloeBar
     //
 
 modifier_order:
