@@ -7,11 +7,11 @@
 # everything to the matching GitHub release tag.
 #
 # Usage:
-#   MARKETING_VERSION=1.0.1 CURRENT_PROJECT_VERSION=1207 bash Scripts/release.sh
+#   MARKETING_VERSION=1.0.2 CURRENT_PROJECT_VERSION=1210 bash Scripts/release.sh
 #
 # Env:
-#   MARKETING_VERSION        Required. Marketing version, e.g. 1.0.1.
-#   CURRENT_PROJECT_VERSION  Required. Build number (CFBundleVersion), e.g. 1207.
+#   MARKETING_VERSION        Required. Marketing version, e.g. 1.0.2.
+#   CURRENT_PROJECT_VERSION  Required. Build number (CFBundleVersion), e.g. 1210.
 #   FLOEBAR_SIGN_ID          Optional. Keychain identity for codesign. Defaults
 #                            to ad-hoc ("-"). Set to "FloeBar Self-Signed" to
 #                            reuse TCC permissions across upgrades on this Mac.
@@ -79,6 +79,32 @@ sign_bundle() {
     codesign --verify --deep --strict --verbose=2 "$target"
 }
 
+thin_bundle_to_arm64() {
+    local target="$1"
+    local binary
+    local architectures
+    local output
+
+    while IFS= read -r -d '' binary; do
+        if [[ "$(file -b "$binary")" != Mach-O* ]]; then
+            continue
+        fi
+
+        architectures="$(lipo "$binary" -archs)"
+        if [[ " $architectures " != *" arm64 "* ]]; then
+            echo "error: bundle contains a Mach-O file without arm64 support: $binary" >&2
+            exit 1
+        fi
+        if [[ "$architectures" == "arm64" ]]; then
+            continue
+        fi
+
+        output="$binary.arm64"
+        lipo "$binary" -thin arm64 -output "$output"
+        mv "$output" "$binary"
+    done < <(find "$target" -type f -print0)
+}
+
 sign_bundle "$APP"
 lipo "$APP/Contents/MacOS/FloeBar" -verify_arch arm64 x86_64
 
@@ -91,7 +117,7 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$UNIVERSAL_ZIP"
 ARM_APP="$DEST/FloeBar-arm64.app"
 rm -rf "$ARM_APP"
 ditto "$APP" "$ARM_APP"
-lipo "$APP/Contents/MacOS/FloeBar" -thin arm64 -output "$ARM_APP/Contents/MacOS/FloeBar"
+thin_bundle_to_arm64 "$ARM_APP"
 sign_bundle "$ARM_APP"
 ARM_ZIP="$DEST/FloeBar-$VERSION-arm64.zip"
 rm -f "$ARM_ZIP"

@@ -67,8 +67,11 @@ more predictable for everyday use. On top of that baseline it adds or changes:
   dependency — it kept a resident panel and library in memory for a feature many
   people never use.
 - **Trimmed the right-click menu** to just Settings and Quit.
-- **Refreshed settings UI** — continuous-corner cards, lighter section titles,
-  and a calmer sidebar, tuned to feel at home in modern macOS System Settings.
+- **Adjustable Floe Bar background opacity** from 0–100%, while keeping menu
+  bar icons crisp and fully opaque. The bar stays visible while you drag the
+  slider so changes can be previewed live.
+- **Refreshed settings UI** — macOS semantic typography, continuous-corner
+  cards, lighter section titles, and restrained SF Symbols with native spacing.
 - **Redesigned app icon** in the Apple squircle style.
 
 ### Localization
@@ -78,9 +81,9 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 
 ### Distribution & privacy
 
-- **No self-updating.** The upstream Sparkle update feed was removed so FloeBar
-  can never replace itself with an official Ice release. (Update in-app once a
-  FloeBar feed is configured.)
+- **Independent in-app updates.** FloeBar uses its own Sparkle feed hosted on
+  GitHub Pages, with EdDSA-signed archives from GitHub Releases. It never uses
+  the upstream Ice feed or installs official Ice builds over FloeBar.
 - **One-time import.** On first launch, if an Ice install is present, FloeBar
   imports your existing settings and menu bar layout once — then leaves your
   FloeBar preferences alone.
@@ -97,6 +100,7 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 - [x] Hide application menus when they overlap shown items
 - [x] Drag-and-drop layout editor
 - [x] Show hidden items in a separate bar (handy for notch MacBooks)
+- [x] Adjust the Floe Bar background opacity with live preview
 
 ### Menu bar appearance
 
@@ -112,6 +116,7 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 - [x] Show/hide section divider icons
 - [x] Toggle application menus
 - [x] Launch at login
+- [x] Check for and install EdDSA-verified updates in the app
 
 ## Install
 
@@ -119,8 +124,8 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 
 Grab the latest build from the [Releases page](https://github.com/EvanZhuYF/FloeBar/releases/latest):
 
-- **`FloeBar-1.0.0-universal.zip`** — runs on any supported Mac (Apple Silicon + Intel). Pick this if unsure.
-- **`FloeBar-1.0.0-arm64.zip`** — smaller, Apple Silicon only.
+- **`FloeBar-1.0.2-universal.zip`** — runs on any supported Mac (Apple Silicon + Intel). Pick this if unsure.
+- **`FloeBar-1.0.2-arm64.zip`** — smaller, Apple Silicon only.
 
 Unzip it and move `FloeBar.app` into `/Applications`. The release builds are
 ad-hoc signed (not notarized), so on first launch macOS may block the app —
@@ -135,6 +140,9 @@ You can verify a download against `SHA256SUMS.txt` from the release:
 ```sh
 shasum -a 256 -c SHA256SUMS.txt
 ```
+
+FloeBar 1.0.0 did not include the FloeBar update feed. Install 1.0.1 or later
+manually once; subsequent releases can be installed from **Settings → Updates**.
 
 ### Build from source
 
