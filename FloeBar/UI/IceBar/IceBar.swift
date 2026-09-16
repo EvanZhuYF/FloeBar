@@ -29,7 +29,7 @@ final class IceBarPanel: NSPanel {
             defer: false
         )
         self.appState = appState
-        self.title = "Floe Bar"
+        self.title = String(localized: "FloeBar")
         self.titlebarAppearsTransparent = true
         self.isMovableByWindowBackground = true
         self.allowsToolTipsWhenApplicationIsInactive = true

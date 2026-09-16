@@ -323,7 +323,7 @@ final class MenuBarManager: ObservableObject {
 
     /// Shows the right-click menu.
     func showRightClickMenu(at point: CGPoint) {
-        let menu = NSMenu(title: "FloeBar")
+        let menu = NSMenu(title: String(localized: "FloeBar"))
 
         let editItem = NSMenuItem(
             title: String(localized: "Edit Menu Bar Appearance…"),

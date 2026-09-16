@@ -417,7 +417,7 @@ final class ControlItem {
 
     /// Creates a menu to show under the control item.
     private func createMenu() -> NSMenu {
-        let menu = NSMenu(title: "FloeBar")
+        let menu = NSMenu(title: String(localized: "FloeBar"))
 
         let settingsItem = NSMenuItem(
             title: String(localized: "FloeBar Settings…"),

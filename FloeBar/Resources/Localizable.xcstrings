@@ -256,7 +256,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "浮冰背景透明度"
+            "value": "浮岛背景透明度"
           }
         }
       }
@@ -476,7 +476,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "请下载最新的 FloeBar 构建以保留你的自定义更改。"
+            "value": "请下载最新的浮岛版本以保留你的自定义更改。"
           }
         }
       }
@@ -496,7 +496,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "由于 0.10.0 版本中的一个问题，FloeBar 的菜单栏项目数据已损坏，因此必须重置其位置。"
+            "value": "由于 0.10.0 版本中的一个问题，浮岛的菜单栏项目数据已损坏，因此必须重置其位置。"
           }
         }
       }
@@ -566,7 +566,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "启用 Floe Bar"
+            "value": "启用浮岛"
           }
         }
       }
@@ -601,12 +601,22 @@
         }
       }
     },
+    "Floe": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浮岛"
+          }
+        }
+      }
+    },
     "FloeBar": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "FloeBar"
+            "value": "浮岛"
           }
         }
       }
@@ -616,7 +626,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "FloeBar 设置…"
+            "value": "浮岛设置…"
           }
         }
       }
@@ -626,7 +636,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "系统自动隐藏菜单栏时，FloeBar 无法排列菜单栏项目"
+            "value": "系统自动隐藏菜单栏时，浮岛无法排列菜单栏项目"
           }
         }
       }
@@ -636,7 +646,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "系统自动隐藏菜单栏时，FloeBar 无法显示菜单栏项目"
+            "value": "系统自动隐藏菜单栏时，浮岛无法显示菜单栏项目"
           }
         }
       }
@@ -646,7 +656,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "系统自动隐藏菜单栏时，FloeBar 无法编辑菜单栏外观"
+            "value": "系统自动隐藏菜单栏时，浮岛无法编辑菜单栏外观"
           }
         }
       }
@@ -656,7 +666,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "FloeBar 图标"
+            "value": "浮岛图标"
           }
         }
       }
@@ -666,7 +676,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "FloeBar 需要获得管理菜单栏的权限。"
+            "value": "浮岛需要获得管理菜单栏的权限。"
           }
         }
       }
@@ -676,7 +686,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "FloeBar 需要借助此权限："
+            "value": "浮岛需要借助此权限："
           }
         }
       }
@@ -836,7 +846,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此版本的 FloeBar 不支持应用内更新。"
+            "value": "此版本的浮岛不支持应用内更新。"
           }
         }
       }
@@ -1136,7 +1146,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按住 Option 并点击一个 FloeBar 菜单栏项目以显示此分区"
+            "value": "按住 Option 并点击一个浮岛菜单栏项目以显示此分区"
           }
         }
       }
@@ -1146,7 +1156,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "按住 Option 并点击一个 FloeBar 菜单栏项目或菜单栏空白区域以显示此分区"
+            "value": "按住 Option 并点击一个浮岛菜单栏项目或菜单栏空白区域以显示此分区"
           }
         }
       }
@@ -1226,7 +1236,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "退出 FloeBar"
+            "value": "退出浮岛"
           }
         }
       }
@@ -1326,7 +1336,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "显示 FloeBar 图标"
+            "value": "显示浮岛图标"
           }
         }
       }
@@ -1486,7 +1496,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Floe Bar 居中显示在 FloeBar 图标下方"
+            "value": "浮岛居中显示在应用图标下方"
           }
         }
       }
@@ -1496,7 +1506,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Floe Bar 居中显示在鼠标指针下方"
+            "value": "浮岛居中显示在鼠标指针下方"
           }
         }
       }
@@ -1506,7 +1516,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Floe Bar 的位置会根据场景变化"
+            "value": "浮岛的位置会根据场景变化"
           }
         }
       }
@@ -1666,7 +1676,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "使用 Floe Bar"
+            "value": "使用浮岛"
           }
         }
       }
@@ -1736,7 +1746,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "仍可右键点击菜单栏空白区域来打开 FloeBar 设置"
+            "value": "仍可右键点击菜单栏空白区域来打开浮岛设置"
           }
         }
       }
