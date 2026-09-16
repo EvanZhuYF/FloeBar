@@ -251,6 +251,16 @@
         }
       }
     },
+    "Background opacity": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "背景透明度"
+          }
+        }
+      }
+    },
     "BETA": {
       "localizations": {
         "zh-Hans": {

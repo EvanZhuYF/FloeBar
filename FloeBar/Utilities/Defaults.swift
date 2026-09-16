@@ -172,6 +172,7 @@ extension Defaults {
         // MARK: Ice Bar Settings
 
         case iceBarLocation = "IceBarLocation"
+        case iceBarBackgroundOpacity = "IceBarBackgroundOpacity"
         case iceBarPinnedLocation = "IceBarPinnedLocation"
 
         // MARK: Migration

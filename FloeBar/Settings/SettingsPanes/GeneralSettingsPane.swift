@@ -139,6 +139,7 @@ struct GeneralSettingsPane: View {
         useIceBar
         if manager.useIceBar {
             iceBarLocationPicker
+            iceBarBackgroundOpacitySlider
         }
     }
 
@@ -164,6 +165,24 @@ struct GeneralSettingsPane: View {
             case .iceIcon:
                 Text("The Floe Bar is centered below the FloeBar icon")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var iceBarBackgroundOpacitySlider: some View {
+        IceLabeledContent("Background opacity") {
+            IceSlider(
+                value: manager.bindings.iceBarBackgroundOpacity,
+                in: 0...1,
+                step: 0.05
+            ) {
+                Text(
+                    manager.iceBarBackgroundOpacity,
+                    format: .percent.precision(.fractionLength(0))
+                )
+                .monospacedDigit()
+            }
+            .frame(width: 150)
         }
     }
 

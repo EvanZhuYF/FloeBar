@@ -205,6 +205,7 @@ private final class IceBarHostingView: NSHostingView<AnyView> {
                 .environmentObject(appState.imageCache)
                 .environmentObject(appState.itemManager)
                 .environmentObject(appState.menuBarManager)
+                .environmentObject(appState.settingsManager.generalSettingsManager)
                 .environmentObject(colorManager)
                 .erasedToAnyView()
         )
@@ -233,6 +234,7 @@ private struct IceBarContentView: View {
     @EnvironmentObject var itemManager: MenuBarItemManager
     @EnvironmentObject var imageCache: MenuBarItemImageCache
     @EnvironmentObject var menuBarManager: MenuBarManager
+    @EnvironmentObject var generalSettingsManager: GeneralSettingsManager
     @State private var frame = CGRect.zero
     @State private var scrollIndicatorsFlashTrigger = 0
 
@@ -284,7 +286,11 @@ private struct IceBarContentView: View {
                 .frame(height: contentHeight)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, verticalPadding)
-                .layoutBarStyle(appState: appState, averageColorInfo: colorManager.colorInfo)
+                .layoutBarStyle(
+                    appState: appState,
+                    averageColorInfo: colorManager.colorInfo,
+                    backgroundOpacity: generalSettingsManager.iceBarBackgroundOpacity
+                )
                 .foregroundStyle(colorManager.colorInfo?.color.brightness ?? 0 > 0.67 ? .black : .white)
                 .clipShape(clipShape)
                 .shadow(color: .black.opacity(configuration.current.hasShadow ? 0.5 : 0), radius: 2.5)

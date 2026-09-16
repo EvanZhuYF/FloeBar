@@ -30,6 +30,9 @@ final class GeneralSettingsManager: ObservableObject {
     /// The location where the Ice Bar appears.
     @Published var iceBarLocation: IceBarLocation = .dynamic
 
+    /// The opacity of the Ice Bar background.
+    @Published var iceBarBackgroundOpacity = 1.0
+
     /// A Boolean value that indicates whether the hidden section
     /// should be shown when the mouse pointer clicks in an empty
     /// area of the menu bar.
@@ -81,11 +84,13 @@ final class GeneralSettingsManager: ObservableObject {
         Defaults.ifPresent(key: .showIceIcon, assign: &showIceIcon)
         Defaults.ifPresent(key: .customIceIconIsTemplate, assign: &customIceIconIsTemplate)
         Defaults.ifPresent(key: .useIceBar, assign: &useIceBar)
+        Defaults.ifPresent(key: .iceBarBackgroundOpacity, assign: &iceBarBackgroundOpacity)
         Defaults.ifPresent(key: .showOnClick, assign: &showOnClick)
         Defaults.ifPresent(key: .showOnHover, assign: &showOnHover)
         Defaults.ifPresent(key: .showOnScroll, assign: &showOnScroll)
         Defaults.ifPresent(key: .autoRehide, assign: &autoRehide)
         Defaults.ifPresent(key: .rehideInterval, assign: &rehideInterval)
+        iceBarBackgroundOpacity = iceBarBackgroundOpacity.clamped(to: 0...1)
 
         Defaults.ifPresent(key: .iceBarLocation) { rawValue in
             if let location = IceBarLocation(rawValue: rawValue) {
@@ -156,6 +161,13 @@ final class GeneralSettingsManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { location in
                 Defaults.set(location.rawValue, forKey: .iceBarLocation)
+            }
+            .store(in: &c)
+
+        $iceBarBackgroundOpacity
+            .receive(on: DispatchQueue.main)
+            .sink { opacity in
+                Defaults.set(opacity, forKey: .iceBarBackgroundOpacity)
             }
             .store(in: &c)
 
