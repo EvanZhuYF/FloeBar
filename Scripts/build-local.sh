@@ -7,6 +7,8 @@ DERIVED="$BUILD_ROOT/DerivedData"
 DEST="$BUILD_ROOT/dist"
 BUILD_BUNDLE_ID="${FLOEBAR_BUILD_BUNDLE_ID:-com.evanzhu.FloeBar.Build}"
 RELEASE_BUNDLE_ID="com.evanzhu.FloeBar"
+MARKETING_VERSION="${FLOEBAR_MARKETING_VERSION:-1.0.2}"
+BUILD_NUMBER="${FLOEBAR_BUILD_NUMBER:-1208}"
 mkdir -p "$DEST"
 
 bash "$ROOT/Scripts/test-section-persistence.sh"
@@ -21,7 +23,7 @@ xcodebuild -quiet \
     ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
     CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= ENABLE_HARDENED_RUNTIME=NO \
     PRODUCT_BUNDLE_IDENTIFIER="$BUILD_BUNDLE_ID" \
-    MARKETING_VERSION=1.0.0 CURRENT_PROJECT_VERSION=1206 \
+    MARKETING_VERSION="$MARKETING_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
     build
 
 APP="$DEST/FloeBar.app"
@@ -56,8 +58,9 @@ codesign --verify --deep --strict --verbose=2 "$APP"
 lipo "$APP/Contents/MacOS/FloeBar" -verify_arch arm64 x86_64
 bash "$ROOT/Scripts/smoke-test-local.sh" "$APP" en
 bash "$ROOT/Scripts/smoke-test-local.sh" "$APP" zh-Hans
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$DEST/FloeBar-1.0.0-local-universal.zip"
-shasum -a 256 "$DEST/FloeBar-1.0.0-local-universal.zip"
+ARCHIVE="$DEST/FloeBar-$MARKETING_VERSION-local-universal.zip"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$ARCHIVE"
+shasum -a 256 "$ARCHIVE"
 
 # Keep LaunchServices from choosing an ad-hoc DerivedData or dist copy when
 # launching FloeBar by name. Only the installed /Applications copy should be
