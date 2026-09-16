@@ -29,10 +29,19 @@ struct SettingsView: View {
 
     private var sidebarIconSize: CGFloat {
         switch sidebarRowSize {
-        case .small: 20
-        case .medium: 24
-        case .large: 26
-        @unknown default: 24
+        case .small: 14
+        case .medium: 16
+        case .large: 17
+        @unknown default: 16
+        }
+    }
+
+    private var sidebarIconFrameSize: CGFloat {
+        switch sidebarRowSize {
+        case .small: 18
+        case .medium: 20
+        case .large: 22
+        @unknown default: 20
         }
     }
 
@@ -88,54 +97,33 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func sidebarItem(for identifier: SettingsNavigationIdentifier) -> some View {
-        Label {
-            Text(identifier.localized)
-        } icon: {
-            let icon = icon(for: identifier)
-            Image(systemName: icon.systemName)
-                .font(.system(size: sidebarIconSize * 0.52, weight: .semibold))
+        HStack(spacing: 10) {
+            Image(systemName: iconName(for: identifier))
+                .font(.system(size: sidebarIconSize, weight: .regular))
                 .symbolRenderingMode(.monochrome)
-                .foregroundStyle(.white)
-                .frame(width: sidebarIconSize, height: sidebarIconSize)
-                .background(
-                    icon.backgroundColor,
-                    in: RoundedRectangle(cornerRadius: sidebarIconSize * 0.23, style: .continuous)
+                .foregroundStyle(
+                    navigationState.settingsNavigationIdentifier == identifier
+                        ? Color.white
+                        : Color.accentColor
                 )
-                .overlay {
-                    RoundedRectangle(cornerRadius: sidebarIconSize * 0.23, style: .continuous)
-                        .stroke(.white.opacity(0.2), lineWidth: 0.5)
-                }
-                .shadow(color: .black.opacity(0.18), radius: 0.75, y: 0.5)
+                .frame(width: sidebarIconFrameSize, height: sidebarIconFrameSize)
                 .accessibilityHidden(true)
+
+            Text(identifier.localized)
         }
         .font(.body)
         .frame(height: sidebarItemHeight)
     }
 
-    private func icon(for identifier: SettingsNavigationIdentifier) -> SettingsSidebarIcon {
+    private func iconName(for identifier: SettingsNavigationIdentifier) -> String {
         switch identifier {
-        case .general:
-            SettingsSidebarIcon(systemName: "gearshape.fill", backgroundColor: Color(nsColor: .systemGray))
-        case .menuBarLayout:
-            SettingsSidebarIcon(
-                systemName: "rectangle.topthird.inset.filled",
-                backgroundColor: Color(nsColor: .systemBlue)
-            )
-        case .menuBarAppearance:
-            SettingsSidebarIcon(systemName: "paintpalette.fill", backgroundColor: Color(nsColor: .systemPurple))
-        case .hotkeys:
-            SettingsSidebarIcon(systemName: "keyboard", backgroundColor: Color(nsColor: .systemIndigo))
-        case .advanced:
-            SettingsSidebarIcon(systemName: "gearshape.2.fill", backgroundColor: Color(nsColor: .systemOrange))
-        case .updates:
-            SettingsSidebarIcon(systemName: "arrow.down.circle.fill", backgroundColor: Color(nsColor: .systemGreen))
-        case .about:
-            SettingsSidebarIcon(systemName: "info.circle.fill", backgroundColor: Color(nsColor: .systemTeal))
+        case .general: "gearshape"
+        case .menuBarLayout: "rectangle.topthird.inset"
+        case .menuBarAppearance: "paintpalette"
+        case .hotkeys: "keyboard"
+        case .advanced: "slider.horizontal.3"
+        case .updates: "arrow.down.circle"
+        case .about: "info.circle"
         }
     }
-}
-
-private struct SettingsSidebarIcon {
-    let systemName: String
-    let backgroundColor: Color
 }
