@@ -160,21 +160,21 @@ final class MenuBarSection {
                 }
             }
         case .visible:
-            iceBarPanel?.close()
+            iceBarPanel?.closeForSectionChange()
             guard let hiddenSection = appState.menuBarManager.section(withName: .hidden) else {
                 return
             }
             controlItem.state = .showItems
             hiddenSection.controlItem.state = .showItems
         case .hidden:
-            iceBarPanel?.close()
+            iceBarPanel?.closeForSectionChange()
             guard let visibleSection = appState.menuBarManager.section(withName: .visible) else {
                 return
             }
             controlItem.state = .showItems
             visibleSection.controlItem.state = .showItems
         case .alwaysHidden:
-            iceBarPanel?.close()
+            iceBarPanel?.closeForSectionChange()
             guard
                 let hiddenSection = appState.menuBarManager.section(withName: .hidden),
                 let visibleSection = appState.menuBarManager.section(withName: .visible)
@@ -196,7 +196,7 @@ final class MenuBarSection {
         else {
             return
         }
-        iceBarPanel?.close()
+        iceBarPanel?.closeForSectionChange()
         switch name {
         case _ where useIceBar:
             for section in appState.menuBarManager.sections {

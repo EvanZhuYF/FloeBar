@@ -251,12 +251,12 @@
         }
       }
     },
-    "Background opacity": {
+    "Floe Bar background opacity": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "背景透明度"
+            "value": "浮冰背景透明度"
           }
         }
       }

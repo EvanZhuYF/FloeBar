@@ -12,12 +12,15 @@ struct IceSlider<Value: BinaryFloatingPoint, ValueLabel: View, ValueLabelSelecta
     private let step: Value
     private let valueLabel: ValueLabel
     private let valueLabelSelectability: ValueLabelSelectability
+    private let onEditingChanged: (Bool) -> Void
+    @State private var sliderState = CompactSliderState.zero
 
     init(
         value: Binding<Value>,
         in bounds: ClosedRange<Value> = 0...1,
         step: Value = 0,
         valueLabelSelectability: ValueLabelSelectability = .disabled,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in },
         @ViewBuilder valueLabel: () -> ValueLabel
     ) {
         self.value = value
@@ -25,6 +28,7 @@ struct IceSlider<Value: BinaryFloatingPoint, ValueLabel: View, ValueLabelSelecta
         self.step = step
         self.valueLabel = valueLabel()
         self.valueLabelSelectability = valueLabelSelectability
+        self.onEditingChanged = onEditingChanged
     }
 
     init(
@@ -32,13 +36,15 @@ struct IceSlider<Value: BinaryFloatingPoint, ValueLabel: View, ValueLabelSelecta
         valueLabelSelectability: ValueLabelSelectability = .disabled,
         value: Binding<Value>,
         in bounds: ClosedRange<Value> = 0...1,
-        step: Value = 0
+        step: Value = 0,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) where ValueLabel == Text {
         self.init(
             value: value,
             in: bounds,
             step: step,
-            valueLabelSelectability: valueLabelSelectability
+            valueLabelSelectability: valueLabelSelectability,
+            onEditingChanged: onEditingChanged
         ) {
             Text(valueLabelKey)
         }
@@ -49,11 +55,15 @@ struct IceSlider<Value: BinaryFloatingPoint, ValueLabel: View, ValueLabelSelecta
             value: value,
             in: bounds,
             step: step,
-            handleVisibility: .hovering(width: 1)
+            handleVisibility: .hovering(width: 1),
+            state: $sliderState
         ) {
             valueLabel
                 .textSelection(valueLabelSelectability)
         }
         .compactSliderDisabledHapticFeedback(true)
+        .onChange(of: sliderState.isDragging) { _, isDragging in
+            onEditingChanged(isDragging)
+        }
     }
 }

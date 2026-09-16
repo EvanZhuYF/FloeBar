@@ -17,6 +17,10 @@ final class IceBarPanel: NSPanel {
 
     private var cancellables = Set<AnyCancellable>()
 
+    private var backgroundOpacityPreviewCloseTask: Task<Void, Never>?
+
+    private(set) var isBackgroundOpacityPreviewActive = false
+
     init(appState: AppState) {
         super.init(
             contentRect: .zero,
@@ -176,6 +180,52 @@ final class IceBarPanel: NSPanel {
         colorManager.updateAllProperties(with: frame, screen: screen)
 
         orderFrontRegardless()
+    }
+
+    func beginBackgroundOpacityPreview() {
+        backgroundOpacityPreviewCloseTask?.cancel()
+        backgroundOpacityPreviewCloseTask = nil
+        isBackgroundOpacityPreviewActive = true
+
+        guard
+            !isVisible,
+            let screen = NSScreen.main
+        else {
+            return
+        }
+
+        Task { [weak self] in
+            guard let self, isBackgroundOpacityPreviewActive else {
+                return
+            }
+            await show(section: .hidden, on: screen)
+            if !isBackgroundOpacityPreviewActive {
+                close()
+            }
+        }
+    }
+
+    func endBackgroundOpacityPreview() {
+        guard isBackgroundOpacityPreviewActive else {
+            return
+        }
+        backgroundOpacityPreviewCloseTask?.cancel()
+        backgroundOpacityPreviewCloseTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(800))
+            guard let self, !Task.isCancelled else {
+                return
+            }
+            isBackgroundOpacityPreviewActive = false
+            close()
+            backgroundOpacityPreviewCloseTask = nil
+        }
+    }
+
+    func closeForSectionChange() {
+        guard !isBackgroundOpacityPreviewActive else {
+            return
+        }
+        close()
     }
 
     override func close() {

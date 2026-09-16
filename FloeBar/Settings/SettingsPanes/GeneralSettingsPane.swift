@@ -170,19 +170,31 @@ struct GeneralSettingsPane: View {
 
     @ViewBuilder
     private var iceBarBackgroundOpacitySlider: some View {
-        IceLabeledContent("Background opacity") {
+        IceLabeledContent("Floe Bar background opacity") {
             IceSlider(
                 value: manager.bindings.iceBarBackgroundOpacity,
                 in: 0...1,
-                step: 0.05
-            ) {
-                Text(
-                    manager.iceBarBackgroundOpacity,
-                    format: .percent.precision(.fractionLength(0))
-                )
-                .monospacedDigit()
-            }
+                step: 0.05,
+                onEditingChanged: { isEditing in
+                    let panel = appState.menuBarManager.iceBarPanel
+                    if isEditing {
+                        panel.beginBackgroundOpacityPreview()
+                    } else {
+                        panel.endBackgroundOpacityPreview()
+                    }
+                },
+                valueLabel: {
+                    Text(
+                        manager.iceBarBackgroundOpacity,
+                        format: .percent.precision(.fractionLength(0))
+                    )
+                    .monospacedDigit()
+                }
+            )
             .frame(width: 150)
+        }
+        .onDisappear {
+            appState.menuBarManager.iceBarPanel.endBackgroundOpacityPreview()
         }
     }
 
