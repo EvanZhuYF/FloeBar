@@ -43,7 +43,8 @@ struct PermissionsView: View {
     private var headerView: some View {
         Label {
             Text("Permissions")
-                .font(.system(size: 36))
+                .font(.largeTitle)
+                .fontWeight(.semibold)
         } icon: {
             if let nsImage = NSImage(named: NSImage.applicationIconName) {
                 Image(nsImage: nsImage)
@@ -64,7 +65,7 @@ struct PermissionsView: View {
             }
             .padding()
         }
-        .font(.title3)
+        .font(.body)
         .padding(.bottom, 10)
     }
 
@@ -116,13 +117,12 @@ struct PermissionsView: View {
         IceSection {
             VStack(spacing: 10) {
                 Text(permission.title)
-                    .font(.title)
-                    .underline()
+                    .font(.title2)
+                    .fontWeight(.semibold)
 
                 VStack(spacing: 0) {
                     Text("FloeBar needs this to:")
-                        .font(.title3)
-                        .bold()
+                        .font(.headline)
 
                     VStack(alignment: .leading) {
                         ForEach(permission.details, id: \.self) { detail in

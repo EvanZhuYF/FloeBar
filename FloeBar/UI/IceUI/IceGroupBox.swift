@@ -72,7 +72,7 @@ struct IceGroupBox<Header: View, Content: View, Footer: View>: View {
         self.init(padding: padding) {
             Text(title)
                 .font(.subheadline)
-                .fontWeight(.semibold)
+                .fontWeight(.medium)
                 .foregroundStyle(.secondary)
         } content: {
             content()

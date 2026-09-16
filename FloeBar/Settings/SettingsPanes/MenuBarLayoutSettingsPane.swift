@@ -23,6 +23,7 @@ struct MenuBarLayoutSettingsPane: View {
     private var header: some View {
         Text("Drag to arrange your menu bar items")
             .font(.title2)
+            .fontWeight(.semibold)
 
         IceGroupBox {
             AnnotationView(
@@ -62,7 +63,8 @@ struct MenuBarLayoutSettingsPane: View {
         {
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(section.name.displayString) Section")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
+                    .fontWeight(.medium)
                     .padding(.leading, 2)
 
                 LayoutBar(section: section)

@@ -27,12 +27,12 @@ struct SettingsView: View {
         }
     }
 
-    private var sidebarItemFontSize: CGFloat {
+    private var sidebarIconSize: CGFloat {
         switch sidebarRowSize {
-        case .small: 13
-        case .medium: 15
-        case .large: 16
-        @unknown default: 15
+        case .small: 20
+        case .medium: 24
+        case .large: 26
+        @unknown default: 24
         }
     }
 
@@ -54,7 +54,7 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("FloeBar")
-                    .font(.title2)
+                    .font(.title3)
                     .fontWeight(.semibold)
                     .foregroundStyle(.primary)
                     .padding(.vertical, 4)
@@ -90,23 +90,52 @@ struct SettingsView: View {
     private func sidebarItem(for identifier: SettingsNavigationIdentifier) -> some View {
         Label {
             Text(identifier.localized)
-                .font(.system(size: sidebarItemFontSize))
-                .padding(.leading, 2)
         } icon: {
-            icon(for: identifier).view
+            let icon = icon(for: identifier)
+            Image(systemName: icon.systemName)
+                .font(.system(size: sidebarIconSize * 0.52, weight: .semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(.white)
+                .frame(width: sidebarIconSize, height: sidebarIconSize)
+                .background(
+                    icon.backgroundColor,
+                    in: RoundedRectangle(cornerRadius: sidebarIconSize * 0.23, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: sidebarIconSize * 0.23, style: .continuous)
+                        .stroke(.white.opacity(0.2), lineWidth: 0.5)
+                }
+                .shadow(color: .black.opacity(0.18), radius: 0.75, y: 0.5)
+                .accessibilityHidden(true)
         }
+        .font(.body)
         .frame(height: sidebarItemHeight)
     }
 
-    private func icon(for identifier: SettingsNavigationIdentifier) -> IconResource {
+    private func icon(for identifier: SettingsNavigationIdentifier) -> SettingsSidebarIcon {
         switch identifier {
-        case .general: .systemSymbol("gearshape")
-        case .menuBarLayout: .systemSymbol("rectangle.topthird.inset.filled")
-        case .menuBarAppearance: .systemSymbol("swatchpalette")
-        case .hotkeys: .systemSymbol("keyboard")
-        case .advanced: .systemSymbol("gearshape.2")
-        case .updates: .systemSymbol("arrow.triangle.2.circlepath.circle")
-        case .about: .assetCatalog(.iceCubeStroke)
+        case .general:
+            SettingsSidebarIcon(systemName: "gearshape.fill", backgroundColor: Color(nsColor: .systemGray))
+        case .menuBarLayout:
+            SettingsSidebarIcon(
+                systemName: "rectangle.topthird.inset.filled",
+                backgroundColor: Color(nsColor: .systemBlue)
+            )
+        case .menuBarAppearance:
+            SettingsSidebarIcon(systemName: "paintpalette.fill", backgroundColor: Color(nsColor: .systemPurple))
+        case .hotkeys:
+            SettingsSidebarIcon(systemName: "keyboard", backgroundColor: Color(nsColor: .systemIndigo))
+        case .advanced:
+            SettingsSidebarIcon(systemName: "gearshape.2.fill", backgroundColor: Color(nsColor: .systemOrange))
+        case .updates:
+            SettingsSidebarIcon(systemName: "arrow.down.circle.fill", backgroundColor: Color(nsColor: .systemGreen))
+        case .about:
+            SettingsSidebarIcon(systemName: "info.circle.fill", backgroundColor: Color(nsColor: .systemTeal))
         }
     }
+}
+
+private struct SettingsSidebarIcon {
+    let systemName: String
+    let backgroundColor: Color
 }
