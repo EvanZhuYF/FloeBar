@@ -24,6 +24,8 @@ enum ControlItemImage: Codable, Hashable {
             return switch name {
             case .chevronLarge: StaticBuiltins.Chevron.large
             case .chevronSmall: StaticBuiltins.Chevron.small
+            case .floeFill: StaticBuiltins.Floe.fill
+            case .floeStroke: StaticBuiltins.Floe.stroke
             }
         case .symbol(let name):
             let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
@@ -54,6 +56,10 @@ extension ControlItemImage {
         case chevronLarge
         /// A small chevron.
         case chevronSmall
+        /// A filled floating ice floe.
+        case floeFill
+        /// An outlined floating ice floe.
+        case floeStroke
     }
 }
 
@@ -88,6 +94,61 @@ extension ControlItemImage {
 
             /// A small chevron.
             static let small = chevron(size: CGSize(width: 9, height: 9), lineWidth: 2)
+        }
+
+        /// A namespace for floating ice floe images.
+        enum Floe {
+            /// Creates a floating ice floe with the given fill style.
+            private static func floe(filled: Bool) -> NSImage {
+                let image = NSImage(size: CGSize(width: 22, height: 18), flipped: false) { _ in
+                    let body = NSBezierPath()
+                    body.move(to: CGPoint(x: 1.5, y: 9))
+                    body.line(to: CGPoint(x: 5.5, y: 13))
+                    body.line(to: CGPoint(x: 12.5, y: 14.5))
+                    body.line(to: CGPoint(x: 20.5, y: 10))
+                    body.line(to: CGPoint(x: 17.5, y: 7))
+                    body.line(to: CGPoint(x: 13.5, y: 6.5))
+                    body.line(to: CGPoint(x: 10.5, y: 4))
+                    body.line(to: CGPoint(x: 7.5, y: 6.5))
+                    body.line(to: CGPoint(x: 3.5, y: 7))
+                    body.close()
+                    body.lineWidth = 1.45
+                    body.lineCapStyle = .round
+                    body.lineJoinStyle = .round
+
+                    NSColor.black.set()
+                    if filled {
+                        body.fill()
+                    } else {
+                        body.stroke()
+                    }
+
+                    let wave = NSBezierPath()
+                    wave.move(to: CGPoint(x: 2.5, y: 1.5))
+                    wave.curve(
+                        to: CGPoint(x: 10.8, y: 1.5),
+                        controlPoint1: CGPoint(x: 5, y: 3.7),
+                        controlPoint2: CGPoint(x: 8.3, y: -0.7)
+                    )
+                    wave.curve(
+                        to: CGPoint(x: 19.5, y: 1.5),
+                        controlPoint1: CGPoint(x: 13.5, y: 3.7),
+                        controlPoint2: CGPoint(x: 17, y: -0.7)
+                    )
+                    wave.lineWidth = 1.45
+                    wave.lineCapStyle = .round
+                    wave.stroke()
+                    return true
+                }
+                image.isTemplate = true
+                return image
+            }
+
+            /// A filled floating ice floe.
+            static let fill = floe(filled: true)
+
+            /// An outlined floating ice floe.
+            static let stroke = floe(filled: false)
         }
     }
 }

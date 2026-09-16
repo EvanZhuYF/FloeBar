@@ -15,6 +15,7 @@ struct ControlItemImageSet: Codable, Hashable, Identifiable {
         case door = "Door"
         case dot = "Dot"
         case ellipsis = "Ellipsis"
+        case floe = "Floe"
         case iceCube = "Ice Cube"
         case sunglasses = "Sunglasses"
         case custom = "Custom"
@@ -26,6 +27,7 @@ struct ControlItemImageSet: Codable, Hashable, Identifiable {
             case .door: String(localized: "Door")
             case .dot: String(localized: "Dot")
             case .ellipsis: String(localized: "Ellipsis")
+            case .floe: String(localized: "Floe")
             case .iceCube: String(localized: "Ice Cube")
             case .sunglasses: String(localized: "Sunglasses")
             case .custom: String(localized: "Custom")
@@ -84,6 +86,11 @@ extension ControlItemImageSet {
             name: .ellipsis,
             hidden: .catalog("EllipsisFill"),
             visible: .catalog("EllipsisStroke")
+        ),
+        ControlItemImageSet(
+            name: .floe,
+            hidden: .builtin(.floeFill),
+            visible: .builtin(.floeStroke)
         ),
         ControlItemImageSet(
             name: .iceCube,
