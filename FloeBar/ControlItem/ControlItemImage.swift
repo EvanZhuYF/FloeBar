@@ -56,9 +56,9 @@ extension ControlItemImage {
         case chevronLarge
         /// A small chevron.
         case chevronSmall
-        /// A filled floating ice floe.
+        /// A filled Antarctica silhouette.
         case floeFill
-        /// An outlined floating ice floe.
+        /// An outlined Antarctica silhouette.
         case floeStroke
     }
 }
@@ -96,59 +96,73 @@ extension ControlItemImage {
             static let small = chevron(size: CGSize(width: 9, height: 9), lineWidth: 2)
         }
 
-        /// A namespace for floating ice floe images.
+        /// A namespace for Antarctica silhouette images.
         enum Floe {
-            /// Creates a floating ice floe with the given fill style.
-            private static func floe(filled: Bool) -> NSImage {
+            /// Creates a simplified Antarctica silhouette with the given fill style.
+            private static func antarctica(filled: Bool) -> NSImage {
                 let image = NSImage(size: CGSize(width: 22, height: 18), flipped: false) { _ in
-                    let body = NSBezierPath()
-                    body.move(to: CGPoint(x: 1.5, y: 9))
-                    body.line(to: CGPoint(x: 5.5, y: 13))
-                    body.line(to: CGPoint(x: 12.5, y: 14.5))
-                    body.line(to: CGPoint(x: 20.5, y: 10))
-                    body.line(to: CGPoint(x: 17.5, y: 7))
-                    body.line(to: CGPoint(x: 13.5, y: 6.5))
-                    body.line(to: CGPoint(x: 10.5, y: 4))
-                    body.line(to: CGPoint(x: 7.5, y: 6.5))
-                    body.line(to: CGPoint(x: 3.5, y: 7))
-                    body.close()
-                    body.lineWidth = 1.45
-                    body.lineCapStyle = .round
-                    body.lineJoinStyle = .round
+                    let continent = NSBezierPath()
+                    continent.move(to: CGPoint(x: 0.8, y: 14.2))
+                    continent.line(to: CGPoint(x: 1.5, y: 12.7))
+                    continent.line(to: CGPoint(x: 3.2, y: 11.1))
+                    continent.line(to: CGPoint(x: 4.8, y: 11.4))
+                    continent.line(to: CGPoint(x: 6.2, y: 12.8))
+                    continent.curve(
+                        to: CGPoint(x: 8.2, y: 15.5),
+                        controlPoint1: CGPoint(x: 6.8, y: 14.2),
+                        controlPoint2: CGPoint(x: 7.2, y: 15.2)
+                    )
+                    continent.curve(
+                        to: CGPoint(x: 12.2, y: 16.5),
+                        controlPoint1: CGPoint(x: 9.2, y: 16.4),
+                        controlPoint2: CGPoint(x: 11, y: 16.8)
+                    )
+                    continent.curve(
+                        to: CGPoint(x: 16.2, y: 15),
+                        controlPoint1: CGPoint(x: 13.6, y: 16.2),
+                        controlPoint2: CGPoint(x: 15.2, y: 15.8)
+                    )
+                    continent.line(to: CGPoint(x: 18.5, y: 13))
+                    continent.curve(
+                        to: CGPoint(x: 20.3, y: 9.7),
+                        controlPoint1: CGPoint(x: 19.6, y: 12),
+                        controlPoint2: CGPoint(x: 20.5, y: 10.7)
+                    )
+                    continent.line(to: CGPoint(x: 19, y: 7.2))
+                    continent.line(to: CGPoint(x: 17.4, y: 5))
+                    continent.line(to: CGPoint(x: 15.2, y: 3.8))
+                    continent.line(to: CGPoint(x: 13.2, y: 1.5))
+                    continent.line(to: CGPoint(x: 11.8, y: 2.3))
+                    continent.line(to: CGPoint(x: 11.1, y: 4.3))
+                    continent.line(to: CGPoint(x: 9.2, y: 3.8))
+                    continent.line(to: CGPoint(x: 6.8, y: 4.5))
+                    continent.line(to: CGPoint(x: 4.8, y: 6.5))
+                    continent.line(to: CGPoint(x: 4.4, y: 8.5))
+                    continent.line(to: CGPoint(x: 3.4, y: 9.8))
+                    continent.line(to: CGPoint(x: 2.2, y: 10.3))
+                    continent.line(to: CGPoint(x: 1.3, y: 11.7))
+                    continent.close()
+                    continent.lineWidth = 1.25
+                    continent.lineCapStyle = .round
+                    continent.lineJoinStyle = .round
 
                     NSColor.black.set()
                     if filled {
-                        body.fill()
+                        continent.fill()
                     } else {
-                        body.stroke()
+                        continent.stroke()
                     }
-
-                    let wave = NSBezierPath()
-                    wave.move(to: CGPoint(x: 2.5, y: 1.5))
-                    wave.curve(
-                        to: CGPoint(x: 10.8, y: 1.5),
-                        controlPoint1: CGPoint(x: 5, y: 3.7),
-                        controlPoint2: CGPoint(x: 8.3, y: -0.7)
-                    )
-                    wave.curve(
-                        to: CGPoint(x: 19.5, y: 1.5),
-                        controlPoint1: CGPoint(x: 13.5, y: 3.7),
-                        controlPoint2: CGPoint(x: 17, y: -0.7)
-                    )
-                    wave.lineWidth = 1.45
-                    wave.lineCapStyle = .round
-                    wave.stroke()
                     return true
                 }
                 image.isTemplate = true
                 return image
             }
 
-            /// A filled floating ice floe.
-            static let fill = floe(filled: true)
+            /// A filled Antarctica silhouette.
+            static let fill = antarctica(filled: true)
 
-            /// An outlined floating ice floe.
-            static let stroke = floe(filled: false)
+            /// An outlined Antarctica silhouette.
+            static let stroke = antarctica(filled: false)
         }
     }
 }
