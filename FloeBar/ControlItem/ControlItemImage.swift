@@ -56,9 +56,9 @@ extension ControlItemImage {
         case chevronLarge
         /// A small chevron.
         case chevronSmall
-        /// A filled Antarctica silhouette.
+        /// A filled FloeBar brand mark.
         case floeFill
-        /// An outlined Antarctica silhouette.
+        /// An outlined FloeBar brand mark.
         case floeStroke
     }
 }
@@ -96,73 +96,57 @@ extension ControlItemImage {
             static let small = chevron(size: CGSize(width: 9, height: 9), lineWidth: 2)
         }
 
-        /// A namespace for Antarctica silhouette images.
+        /// A namespace for FloeBar brand mark images.
         enum Floe {
-            /// Creates a simplified Antarctica silhouette with the given fill style.
-            private static func antarctica(filled: Bool) -> NSImage {
+            /// Creates the App Icon's core symbol without its blue background.
+            private static func brandMark(filled: Bool) -> NSImage {
                 let image = NSImage(size: CGSize(width: 22, height: 18), flipped: false) { _ in
-                    let continent = NSBezierPath()
-                    continent.move(to: CGPoint(x: 0.8, y: 14.2))
-                    continent.line(to: CGPoint(x: 1.5, y: 12.7))
-                    continent.line(to: CGPoint(x: 3.2, y: 11.1))
-                    continent.line(to: CGPoint(x: 4.8, y: 11.4))
-                    continent.line(to: CGPoint(x: 6.2, y: 12.8))
-                    continent.curve(
-                        to: CGPoint(x: 8.2, y: 15.5),
-                        controlPoint1: CGPoint(x: 6.8, y: 14.2),
-                        controlPoint2: CGPoint(x: 7.2, y: 15.2)
+                    let capsule = NSBezierPath(
+                        roundedRect: CGRect(x: 1, y: 8.5, width: 20, height: 7.5),
+                        xRadius: 3.75,
+                        yRadius: 3.75
                     )
-                    continent.curve(
-                        to: CGPoint(x: 12.2, y: 16.5),
-                        controlPoint1: CGPoint(x: 9.2, y: 16.4),
-                        controlPoint2: CGPoint(x: 11, y: 16.8)
+                    let leadingDot = NSBezierPath(
+                        ovalIn: CGRect(x: 13, y: 11, width: 2.4, height: 2.4)
                     )
-                    continent.curve(
-                        to: CGPoint(x: 16.2, y: 15),
-                        controlPoint1: CGPoint(x: 13.6, y: 16.2),
-                        controlPoint2: CGPoint(x: 15.2, y: 15.8)
+                    let trailingDot = NSBezierPath(
+                        ovalIn: CGRect(x: 16.5, y: 11, width: 2.4, height: 2.4)
                     )
-                    continent.line(to: CGPoint(x: 18.5, y: 13))
-                    continent.curve(
-                        to: CGPoint(x: 20.3, y: 9.7),
-                        controlPoint1: CGPoint(x: 19.6, y: 12),
-                        controlPoint2: CGPoint(x: 20.5, y: 10.7)
+                    let lowerBar = NSBezierPath(
+                        roundedRect: CGRect(x: 1.5, y: 2, width: 8.5, height: 4),
+                        xRadius: 2,
+                        yRadius: 2
                     )
-                    continent.line(to: CGPoint(x: 19, y: 7.2))
-                    continent.line(to: CGPoint(x: 17.4, y: 5))
-                    continent.line(to: CGPoint(x: 15.2, y: 3.8))
-                    continent.line(to: CGPoint(x: 13.2, y: 1.5))
-                    continent.line(to: CGPoint(x: 11.8, y: 2.3))
-                    continent.line(to: CGPoint(x: 11.1, y: 4.3))
-                    continent.line(to: CGPoint(x: 9.2, y: 3.8))
-                    continent.line(to: CGPoint(x: 6.8, y: 4.5))
-                    continent.line(to: CGPoint(x: 4.8, y: 6.5))
-                    continent.line(to: CGPoint(x: 4.4, y: 8.5))
-                    continent.line(to: CGPoint(x: 3.4, y: 9.8))
-                    continent.line(to: CGPoint(x: 2.2, y: 10.3))
-                    continent.line(to: CGPoint(x: 1.3, y: 11.7))
-                    continent.close()
-                    continent.lineWidth = 1.25
-                    continent.lineCapStyle = .round
-                    continent.lineJoinStyle = .round
 
-                    NSColor.black.set()
                     if filled {
-                        continent.fill()
+                        capsule.append(leadingDot)
+                        capsule.append(trailingDot)
+                        capsule.windingRule = .evenOdd
+                        NSColor.black.setFill()
+                        capsule.fill()
                     } else {
-                        continent.stroke()
+                        capsule.lineWidth = 1.4
+                        NSColor.black.setStroke()
+                        capsule.stroke()
+
+                        NSColor.black.setFill()
+                        leadingDot.fill()
+                        trailingDot.fill()
                     }
+
+                    NSColor.black.withAlphaComponent(0.55).setFill()
+                    lowerBar.fill()
                     return true
                 }
                 image.isTemplate = true
                 return image
             }
 
-            /// A filled Antarctica silhouette.
-            static let fill = antarctica(filled: true)
+            /// A filled FloeBar brand mark.
+            static let fill = brandMark(filled: true)
 
-            /// An outlined Antarctica silhouette.
-            static let stroke = antarctica(filled: false)
+            /// An outlined FloeBar brand mark.
+            static let stroke = brandMark(filled: false)
         }
     }
 }
