@@ -164,6 +164,7 @@ extension Defaults {
         case showOnHoverDelay = "ShowOnHoverDelay"
         case tempShowInterval = "TempShowInterval"
         case showAllSectionsOnUserDrag = "ShowAllSectionsOnUserDrag"
+        case enableDiagnosticLogging = "EnableDiagnosticLogging"
 
         // MARK: Menu Bar Appearance Settings
 

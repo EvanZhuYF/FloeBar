@@ -8,6 +8,7 @@ import SwiftUI
 struct AdvancedSettingsPane: View {
     @EnvironmentObject var appState: AppState
     @State private var maxSliderLabelWidth: CGFloat = 0
+    @State private var currentLogFileName: String?
 
     private var menuBarManager: MenuBarManager {
         appState.menuBarManager
@@ -41,6 +42,9 @@ struct AdvancedSettingsPane: View {
             IceSection {
                 showOnHoverDelaySlider
                 tempShowIntervalSlider
+            }
+            IceSection("Diagnostics") {
+                diagnosticLogging
             }
         }
     }
@@ -134,6 +138,33 @@ struct AdvancedSettingsPane: View {
     @ViewBuilder
     private var showAllSectionsOnUserDrag: some View {
         Toggle("Show all sections when Command + dragging menu bar items", isOn: manager.bindings.showAllSectionsOnUserDrag)
+    }
+
+    @ViewBuilder
+    private var diagnosticLogging: some View {
+        Toggle("Enable diagnostic logging", isOn: manager.bindings.enableDiagnosticLogging)
+            .annotation("Writes detailed logs to a file for troubleshooting. Log files are saved to ~/Library/Logs/FloeBar/. Disable when not needed to avoid unnecessary disk writes.")
+
+        if manager.enableDiagnosticLogging || DiagnosticLogger.shared.hasLogFiles {
+            IceLabeledContent {
+                Button("Show Log Files in Finder") {
+                    NSWorkspace.shared.open(DiagnosticLogger.shared.logDirectory)
+                }
+            } label: {
+                if let currentLogFileName {
+                    Text(currentLogFileName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .task(id: manager.enableDiagnosticLogging) {
+                // Let the Combine sink create/close the log file first.
+                try? await Task.sleep(for: .milliseconds(50))
+                currentLogFileName = (
+                    DiagnosticLogger.shared.currentLogFile ?? DiagnosticLogger.shared.latestLogFile
+                )?.lastPathComponent
+            }
+        }
     }
 }
 

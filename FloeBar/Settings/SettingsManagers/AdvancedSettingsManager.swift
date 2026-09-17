@@ -34,6 +34,10 @@ final class AdvancedSettingsManager: ObservableObject {
     /// the user is dragging items in the menu bar.
     @Published var showAllSectionsOnUserDrag = true
 
+    /// A Boolean value that indicates whether diagnostic logging to a file
+    /// on disk is enabled.
+    @Published var enableDiagnosticLogging = false
+
     /// Storage for internal observers.
     private var cancellables = Set<AnyCancellable>()
 
@@ -57,6 +61,10 @@ final class AdvancedSettingsManager: ObservableObject {
         Defaults.ifPresent(key: .showOnHoverDelay, assign: &showOnHoverDelay)
         Defaults.ifPresent(key: .tempShowInterval, assign: &tempShowInterval)
         Defaults.ifPresent(key: .showAllSectionsOnUserDrag, assign: &showAllSectionsOnUserDrag)
+        Defaults.ifPresent(key: .enableDiagnosticLogging, assign: &enableDiagnosticLogging)
+
+        // Apply the persisted diagnostic logging state on launch.
+        DiagnosticLogger.shared.isEnabled = enableDiagnosticLogging
     }
 
     private func configureCancellables() {
@@ -108,6 +116,14 @@ final class AdvancedSettingsManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { showAll in
                 Defaults.set(showAll, forKey: .showAllSectionsOnUserDrag)
+            }
+            .store(in: &c)
+
+        $enableDiagnosticLogging
+            .receive(on: DispatchQueue.main)
+            .sink { isEnabled in
+                Defaults.set(isEnabled, forKey: .enableDiagnosticLogging)
+                DiagnosticLogger.shared.isEnabled = isEnabled
             }
             .store(in: &c)
 

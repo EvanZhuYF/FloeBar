@@ -251,16 +251,6 @@
         }
       }
     },
-    "Floe Bar background opacity": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "浮岛背景透明度"
-          }
-        }
-      }
-    },
     "BETA": {
       "localizations": {
         "zh-Hans": {
@@ -407,6 +397,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "深色外观"
+          }
+        }
+      }
+    },
+    "Diagnostics": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "诊断"
           }
         }
       }
@@ -561,6 +561,16 @@
         }
       }
     },
+    "Enable diagnostic logging": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用诊断日志"
+          }
+        }
+      }
+    },
     "Enable the Floe Bar": {
       "localizations": {
         "zh-Hans": {
@@ -607,6 +617,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "浮岛"
+          }
+        }
+      }
+    },
+    "Floe Bar background opacity": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浮岛背景透明度"
           }
         }
       }
@@ -1341,6 +1361,16 @@
         }
       }
     },
+    "Show Log Files in Finder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在访达中显示日志文件"
+          }
+        }
+      }
+    },
     "Show all sections when Command + dragging menu bar items": {
       "localizations": {
         "zh-Hans": {
@@ -1737,6 +1767,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wi-Fi"
+          }
+        }
+      }
+    },
+    "Writes detailed logs to a file for troubleshooting. Log files are saved to ~/Library/Logs/FloeBar/. Disable when not needed to avoid unnecessary disk writes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将详细日志写入文件以便排查问题。日志文件保存在 ~/Library/Logs/FloeBar/。不需要时请关闭，以避免不必要的磁盘写入。"
           }
         }
       }
