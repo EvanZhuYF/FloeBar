@@ -7,8 +7,8 @@ DERIVED="$BUILD_ROOT/DerivedData"
 DEST="$BUILD_ROOT/dist"
 BUILD_BUNDLE_ID="${FLOEBAR_BUILD_BUNDLE_ID:-com.evanzhu.FloeBar.Build}"
 RELEASE_BUNDLE_ID="com.evanzhu.FloeBar"
-MARKETING_VERSION="${FLOEBAR_MARKETING_VERSION:-1.0.3}"
-BUILD_NUMBER="${FLOEBAR_BUILD_NUMBER:-1214}"
+MARKETING_VERSION="${FLOEBAR_MARKETING_VERSION:-1.0.10}"
+BUILD_NUMBER="${FLOEBAR_BUILD_NUMBER:-1222}"
 mkdir -p "$DEST"
 
 bash "$ROOT/Scripts/test-section-persistence.sh"
@@ -35,10 +35,9 @@ plutil -replace CFBundleIdentifier -string "$RELEASE_BUNDLE_ID" "$APP/Contents/I
 # IceLocalBuild is the internal flag UpdatesManager reads to disable self-updates.
 plutil -insert IceLocalBuild -bool true "$APP/Contents/Info.plist"
 
-# Signing identity. Defaults to ad-hoc ("-"). Set FLOEBAR_SIGN_ID to a keychain
-# identity (e.g. "FloeBar Self-Signed") for a stable signature so macOS reuses
-# previously granted permissions across reinstalls.
-SIGN_ID="${FLOEBAR_SIGN_ID:--}"
+# Keep the same signing identity as published builds for stable permissions.
+# FLOEBAR_SIGN_ID can explicitly override this for other build environments.
+SIGN_ID="${FLOEBAR_SIGN_ID:-FloeBar Self-Signed}"
 
 # Sign inside-out. Ad-hoc signatures cannot use hardened runtime library validation.
 SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"

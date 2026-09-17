@@ -44,6 +44,11 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 
 ### Reliability
 
+- **macOS 26 compatibility fixes**, validated on an Intel Mac: prevent window
+  identifier conversion crashes, restore section detection, keep captured icons
+  distinct, and position the Floe Bar beneath its menu bar icon.
+- **Readable layout previews** with a softer dark-gray fallback when sampled
+  backgrounds would make white menu bar icons hard to see.
 - **Per-item section memory.** Each icon's *hidden* / *always-hidden*
   assignment is persisted per app and actively restored, so categories survive
   relaunches, reboots, and macOS shuffling icons around — instead of being
@@ -84,6 +89,10 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 
 ### Distribution & privacy
 
+- **Optional local diagnostic logs.** Enable them in **Settings → Advanced →
+  Diagnostics** when troubleshooting, then open the log folder from settings.
+  Logging is off by default, keeps the five most recent files, and does not
+  automatically upload logs.
 - **Independent in-app updates.** FloeBar uses its own Sparkle feed hosted on
   GitHub Pages, with EdDSA-signed archives from GitHub Releases. It never uses
   the upstream Ice feed or installs official Ice builds over FloeBar.
@@ -127,16 +136,10 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 
 Grab the latest build from the [Releases page](https://github.com/EvanZhuYF/FloeBar/releases/latest):
 
-- **`FloeBar-1.0.3-universal.zip`** — runs on any supported Mac (Apple Silicon + Intel). Pick this if unsure.
-- **`FloeBar-1.0.3-arm64.zip`** — smaller, Apple Silicon only.
+- **`FloeBar-1.0.10-universal.zip`** — runs on any supported Mac (Apple Silicon + Intel). Pick this if unsure.
+- **`FloeBar-1.0.10-arm64.zip`** — smaller, Apple Silicon only.
 
-Unzip it and move `FloeBar.app` into `/Applications`. The release builds are
-ad-hoc signed (not notarized), so on first launch macOS may block the app —
-right-click it and choose **Open**, or run:
-
-```sh
-xattr -dr com.apple.quarantine /Applications/FloeBar.app
-```
+Unzip it and move the app into `/Applications`.
 
 You can verify a download against `SHA256SUMS.txt` from the release:
 

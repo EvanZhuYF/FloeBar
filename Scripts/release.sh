@@ -1,20 +1,20 @@
 #!/bin/bash
 # Release build + publish for FloeBar.
 #
-# Builds a universal (arm64 + x86_64) Release, signs it (ad-hoc by default),
+# Builds a universal (arm64 + x86_64) Release, signs it with a stable identity,
 # zips universal and arm64 archives, produces EdDSA signatures with Sparkle's
 # sign_update, refreshes docs/appcast.xml, writes SHA256SUMS.txt, and uploads
 # everything to the matching GitHub release tag.
 #
 # Usage:
-#   MARKETING_VERSION=1.0.3 CURRENT_PROJECT_VERSION=1214 bash Scripts/release.sh
+#   MARKETING_VERSION=1.0.10 CURRENT_PROJECT_VERSION=1222 bash Scripts/release.sh
 #
 # Env:
 #   MARKETING_VERSION        Required. Marketing version, e.g. 1.0.3.
 #   CURRENT_PROJECT_VERSION  Required. Build number (CFBundleVersion), e.g. 1214.
 #   FLOEBAR_SIGN_ID          Optional. Keychain identity for codesign. Defaults
-#                            to ad-hoc ("-"). Set to "FloeBar Self-Signed" to
-#                            reuse TCC permissions across upgrades on this Mac.
+#                            to "FloeBar Self-Signed". Keep the same certificate
+#                            across releases for a stable signing requirement.
 #   FLOEBAR_SKIP_UPLOAD      Optional. Set to 1 to build + sign + refresh the
 #                            appcast without creating/uploading the GitHub
 #                            release (dry run).
@@ -30,7 +30,7 @@ SPARKLE_BIN="$ROOT/build/local/SourcePackages/artifacts/sparkle/Sparkle/bin"
 VERSION="${MARKETING_VERSION:?set MARKETING_VERSION, e.g. 1.0.1}"
 BUILD_NUMBER="${CURRENT_PROJECT_VERSION:?set CURRENT_PROJECT_VERSION, e.g. 1207}"
 TAG="v$VERSION"
-SIGN_ID="${FLOEBAR_SIGN_ID:--}"
+SIGN_ID="${FLOEBAR_SIGN_ID:-FloeBar Self-Signed}"
 
 mkdir -p "$DEST"
 
@@ -52,6 +52,10 @@ APP="$DEST/FloeBar.app"
 rm -rf "$APP"
 ditto "$DERIVED/Build/Products/Release/FloeBar.app" "$APP"
 plutil -replace CFBundleIdentifier -string "$RELEASE_BUNDLE_ID" "$APP/Contents/Info.plist"
+
+# Remove debug-map entries containing local source/object paths before signing.
+# Keep the separate dSYM in DerivedData for local crash symbolication.
+xcrun strip -S "$APP/Contents/MacOS/FloeBar"
 
 # Guard: a published build must carry a real SUPublicEDKey, or Sparkle can never
 # verify the very updates this pipeline signs.
@@ -152,9 +156,16 @@ NEW_ITEM="        <item>
 # Insert the new item immediately after the first <language> line.
 python3 - "$APPCAST" "$NEW_ITEM" <<'PY'
 import sys
+import re
 path, item = sys.argv[1], sys.argv[2]
 with open(path, encoding="utf-8") as f:
     text = f.read()
+# Rebuilding an unpublished release must replace its existing feed entry.
+title = re.search(r"<title>(.*?)</title>", item).group(1)
+text = re.sub(
+    r"        <item>\s*<title>" + re.escape(title) + r"</title>.*?</item>\n",
+    "", text, flags=re.DOTALL
+)
 marker = "</language>\n"
 idx = text.index(marker) + len(marker)
 # Drop the placeholder item block if it is still present.
