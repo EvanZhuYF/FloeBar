@@ -136,8 +136,8 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 
 Grab the latest build from the [Releases page](https://github.com/EvanZhuYF/FloeBar/releases/latest):
 
-- **`FloeBar-1.0.10-universal.zip`** — runs on any supported Mac (Apple Silicon + Intel). Pick this if unsure.
-- **`FloeBar-1.0.10-arm64.zip`** — smaller, Apple Silicon only.
+- **`FloeBar-1.0.4-universal.zip`** — runs on any supported Mac (Apple Silicon + Intel). Pick this if unsure.
+- **`FloeBar-1.0.4-arm64.zip`** — smaller, Apple Silicon only.
 
 Unzip it and move the app into `/Applications`.
 
