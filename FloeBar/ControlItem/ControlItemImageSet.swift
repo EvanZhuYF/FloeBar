@@ -53,15 +53,19 @@ struct ControlItemImageSet: Codable, Hashable, Identifiable {
 }
 
 extension ControlItemImageSet {
-    /// The default image set for the Ice icon.
-    static let defaultIceIcon = ControlItemImageSet(
-        name: .dot,
-        hidden: .catalog("DotFill"),
-        visible: .catalog("DotStroke")
+    /// The FloeBar brand image set.
+    private static let floeIcon = ControlItemImageSet(
+        name: .floe,
+        hidden: .builtin(.floeFill),
+        visible: .builtin(.floeStroke)
     )
+
+    /// The default image set for the FloeBar icon.
+    static let defaultIceIcon = floeIcon
 
     /// The image sets that the user can choose to display in the Ice icon.
     static let userSelectableIceIcons = [
+        floeIcon,
         ControlItemImageSet(
             name: .arrow,
             hidden: .symbol("arrowshape.left.fill"),
@@ -86,11 +90,6 @@ extension ControlItemImageSet {
             name: .ellipsis,
             hidden: .catalog("EllipsisFill"),
             visible: .catalog("EllipsisStroke")
-        ),
-        ControlItemImageSet(
-            name: .floe,
-            hidden: .builtin(.floeFill),
-            visible: .builtin(.floeStroke)
         ),
         ControlItemImageSet(
             name: .iceCube,
