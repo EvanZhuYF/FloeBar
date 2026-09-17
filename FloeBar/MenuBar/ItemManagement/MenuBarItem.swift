@@ -241,6 +241,20 @@ private extension MenuBarItemInfo {
     /// it is a valid menu bar item window. Only call this initializer if you are
     /// certain that the window is valid.
     init(uncheckedItemWindow itemWindow: WindowInfo) {
+        switch itemWindow.title.flatMap(ControlItem.Identifier.init(rawValue:)) {
+        case .iceIcon:
+            self = .iceIcon
+            return
+        case .hidden:
+            self = .hiddenControlItem
+            return
+        case .alwaysHidden:
+            self = .alwaysHiddenControlItem
+            return
+        case nil:
+            break
+        }
+
         if let bundleIdentifier = itemWindow.owningApplication?.bundleIdentifier {
             self.namespace = Namespace(bundleIdentifier)
         } else {

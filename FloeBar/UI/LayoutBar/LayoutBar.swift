@@ -39,7 +39,11 @@ struct LayoutBar: View {
         conditionalBody
             .frame(height: 50)
             .frame(maxWidth: .infinity)
-            .layoutBarStyle(appState: appState, averageColorInfo: menuBarManager.averageColorInfo)
+            .layoutBarStyle(
+                appState: appState,
+                averageColorInfo: menuBarManager.averageColorInfo,
+                prefersHighContrastBackground: true
+            )
             .clipShape(roundedRectangle)
             .overlay {
                 roundedRectangle

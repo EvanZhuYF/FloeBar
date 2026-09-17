@@ -63,10 +63,16 @@ final class ControlItem {
 
     /// The identifier of the control item's window.
     var windowID: CGWindowID? {
-        guard let window else {
+        // `windowNumber` is an `Int`, but `CGWindowID` is a `UInt32`. The value can
+        // be zero or negative before the status item has an on-screen window device,
+        // and on some systems (observed on Intel macOS 26) it can also exceed
+        // `UInt32.max`. Converting either out-of-range value with `CGWindowID(_:)`
+        // traps with an illegal instruction, so use the failable `exactly:` form and
+        // let callers fall back to their default handling.
+        guard let window, let windowID = CGWindowID(exactly: window.windowNumber), windowID > 0 else {
             return nil
         }
-        return CGWindowID(window.windowNumber)
+        return windowID
     }
 
     /// A Boolean value that indicates whether the control item serves as

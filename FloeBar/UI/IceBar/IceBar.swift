@@ -71,7 +71,13 @@ final class IceBarPanel: NSPanel {
                         // Only continue if the menu bar is automatically hidden, as Ice
                         // can't currently display its menu bar items.
                         appState.menuBarManager.isMenuBarHiddenBySystemUserDefaults,
-                        let info = window.flatMap({ WindowInfo(windowID: CGWindowID($0.windowNumber)) }),
+                        let window,
+                        // `windowNumber` is an `Int` that can be out of `CGWindowID`'s
+                        // (`UInt32`) range; converting it directly would trap. Use the
+                        // failable `exactly:` form to guard against that.
+                        let windowID = CGWindowID(exactly: window.windowNumber),
+                        windowID > 0,
+                        let info = WindowInfo(windowID: windowID),
                         // Window being offscreen means the menu bar is currently hidden.
                         // Close the bar, as things will start to look weird if we don't.
                         !info.isOnScreen
@@ -137,18 +143,41 @@ final class IceBarPanel: NSPanel {
                 let lowerBound = screen.frame.minX
                 let upperBound = screen.frame.maxX - frame.width
 
-                guard
-                    lowerBound <= upperBound,
-                    let section = appState.menuBarManager.section(withName: .visible),
+                guard lowerBound <= upperBound,
+                      let section = appState.menuBarManager.section(withName: .visible) else {
+                    return originForRightOfScreen
+                }
+
+                func origin(for itemFrame: CGRect) -> CGPoint {
+                    CGPoint(x: (itemFrame.midX - frame.width / 2).clamped(to: lowerBound...upperBound), y: originY)
+                }
+
+                if
                     let windowID = section.controlItem.windowID,
                     // Bridging.getWindowFrame is more reliable than ControlItem.windowFrame,
                     // i.e. if the control item is offscreen.
                     let itemFrame = Bridging.getWindowFrame(for: windowID)
-                else {
-                    return originForRightOfScreen
+                {
+                    return origin(for: itemFrame)
                 }
 
-                return CGPoint(x: (itemFrame.midX - frame.width / 2).clamped(to: lowerBound...upperBound), y: originY)
+                // On Intel macOS 26, NSStatusItem's AppKit windowNumber can exceed
+                // CGWindowID's UInt32 range. In that case, recover the visible
+                // control item frame from the CGS menu bar item list by its stable
+                // title before falling back to AppKit's window frame.
+                if let itemFrame = MenuBarItem
+                    .getMenuBarItems(on: screen.displayID, onScreenOnly: false, activeSpaceOnly: true)
+                    .first(where: { $0.info == .iceIcon })?
+                    .frame
+                {
+                    return origin(for: itemFrame)
+                }
+
+                if let itemFrame = section.controlItem.windowFrame ?? section.controlItem.window?.frame {
+                    return origin(for: itemFrame)
+                }
+
+                return originForRightOfScreen
             }
         }
 
@@ -421,7 +450,7 @@ private struct IceBarItemView: View {
 
     private var image: NSImage? {
         guard
-            let image = imageCache.images[item.info],
+            let image = imageCache.images[item.windowID],
             let screen = imageCache.screen
         else {
             return nil

@@ -137,6 +137,7 @@ extension Bridging {
             Logger.bridging.error("CGSGetProcessMenuBarWindowList failed with error \(result.logString)")
             return []
         }
+        Logger.bridging.debug("getMenuBarWindowList: windowCount=\(windowCount), realCount=\(realCount)")
         return [CGWindowID](list[..<Int(realCount)])
     }
 

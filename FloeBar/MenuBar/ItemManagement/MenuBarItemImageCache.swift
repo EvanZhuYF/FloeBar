@@ -9,7 +9,7 @@ import Combine
 /// Cache for menu bar item images.
 final class MenuBarItemImageCache: ObservableObject {
     /// The cached item images.
-    @Published private(set) var images = [MenuBarItemInfo: CGImage]()
+    @Published private(set) var images = [CGWindowID: CGImage]()
 
     /// The screen of the cached item images.
     private(set) var screen: NSScreen?
@@ -93,28 +93,27 @@ final class MenuBarItemImageCache: ObservableObject {
             return false
         }
         let keys = Set(images.keys)
-        for item in items where keys.contains(item.info) {
+        for item in items where keys.contains(item.windowID) {
             return false
         }
         return true
     }
 
     /// Captures the images of the current menu bar items and returns a dictionary containing
-    /// the images, keyed by the current menu bar item infos.
-    func createImages(for section: MenuBarSection.Name, screen: NSScreen) async -> [MenuBarItemInfo: CGImage] {
+    /// the images, keyed by the current menu bar item window identifiers.
+    func createImages(for section: MenuBarSection.Name, screen: NSScreen) async -> [CGWindowID: CGImage] {
         guard let appState else {
             return [:]
         }
 
         let items = await appState.itemManager.itemCache[section]
 
-        var images = [MenuBarItemInfo: CGImage]()
+        var images = [CGWindowID: CGImage]()
         let backingScaleFactor = screen.backingScaleFactor
         let displayBounds = CGDisplayBounds(screen.displayID)
         let option: CGWindowImageOption = [.boundsIgnoreFraming, .bestResolution]
         let defaultItemThickness = NSStatusBar.system.thickness * backingScaleFactor
 
-        var itemInfos = [CGWindowID: MenuBarItemInfo]()
         var itemFrames = [CGWindowID: CGRect]()
         var windowIDs = [CGWindowID]()
         var frame = CGRect.null
@@ -128,7 +127,6 @@ final class MenuBarItemImageCache: ObservableObject {
             else {
                 continue
             }
-            itemInfos[windowID] = item.info
             itemFrames[windowID] = itemFrame
             windowIDs.append(windowID)
             frame = frame.union(itemFrame)
@@ -139,10 +137,7 @@ final class MenuBarItemImageCache: ObservableObject {
             CGFloat(compositeImage.width) == frame.width * backingScaleFactor
         {
             for windowID in windowIDs {
-                guard
-                    let itemInfo = itemInfos[windowID],
-                    let itemFrame = itemFrames[windowID]
-                else {
+                guard let itemFrame = itemFrames[windowID] else {
                     continue
                 }
 
@@ -157,16 +152,13 @@ final class MenuBarItemImageCache: ObservableObject {
                     continue
                 }
 
-                images[itemInfo] = itemImage
+                images[windowID] = itemImage
             }
         } else {
             Logger.imageCache.warning("Composite image capture failed. Attempting to capturing items individually.")
 
             for windowID in windowIDs {
-                guard
-                    let itemInfo = itemInfos[windowID],
-                    let itemFrame = itemFrames[windowID]
-                else {
+                guard let itemFrame = itemFrames[windowID] else {
                     continue
                 }
 
@@ -184,7 +176,7 @@ final class MenuBarItemImageCache: ObservableObject {
                     continue
                 }
 
-                images[itemInfo] = croppedImage
+                images[windowID] = croppedImage
             }
         }
 
@@ -206,8 +198,8 @@ final class MenuBarItemImageCache: ObservableObject {
         }
 
         let currentItems = await appState.itemManager.itemCache.allItems
-        let validItemInfos = Set(currentItems.map(\.info))
-        var updatedImages = [MenuBarItemInfo: CGImage]()
+        let validWindowIDs = Set(currentItems.map(\.windowID))
+        var updatedImages = [CGWindowID: CGImage]()
 
         for section in sections {
             guard !Task.isCancelled else {
@@ -234,7 +226,7 @@ final class MenuBarItemImageCache: ObservableObject {
             guard updateGeneration == generation else {
                 return
             }
-            self.images = self.images.filter { validItemInfos.contains($0.key) }
+            self.images = self.images.filter { validWindowIDs.contains($0.key) }
             self.images.merge(committedImages) { (_, new) in new }
             self.screen = NSScreen.screens.first { $0.displayID == displayID }
             self.menuBarHeight = menuBarHeight

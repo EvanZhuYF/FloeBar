@@ -14,23 +14,37 @@ extension View {
     func layoutBarStyle(
         appState: AppState,
         averageColorInfo: MenuBarAverageColorInfo?,
-        backgroundOpacity: Double = 1
+        backgroundOpacity: Double = 1,
+        prefersHighContrastBackground: Bool = false
     ) -> some View {
         background {
             Group {
                 if appState.isActiveSpaceFullscreen {
                     Color.black
                 } else if let averageColorInfo {
+                    let useDarkFallback = prefersHighContrastBackground && (averageColorInfo.color.brightness ?? 0) > 0.67
                     switch averageColorInfo.source {
                     case .menuBarWindow:
-                        Color(cgColor: averageColorInfo.color)
+                        Group {
+                            if useDarkFallback {
+                                Color(.sRGB, white: 0.22, opacity: 1)
+                            } else {
+                                Color(cgColor: averageColorInfo.color)
+                            }
+                        }
                             .overlay(
                                 Material.bar
                                     .opacity(0.2)
                                     .blendMode(.softLight)
                             )
                     case .desktopWallpaper:
-                        Color(cgColor: averageColorInfo.color)
+                        Group {
+                            if useDarkFallback {
+                                Color(.sRGB, white: 0.22, opacity: 1)
+                            } else {
+                                Color(cgColor: averageColorInfo.color)
+                            }
+                        }
                             .overlay(
                                 Material.bar
                                     .opacity(0.5)

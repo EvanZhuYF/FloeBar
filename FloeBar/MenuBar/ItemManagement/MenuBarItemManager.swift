@@ -418,6 +418,18 @@ extension MenuBarItemManager {
         var items = MenuBarItem.getMenuBarItems(from: activeWindowIDs, excludeUntitled: true)
         let allItems = items
 
+        Logger.itemManager.debug(
+            "Cache pass: menuBarItem windows=\(windowIDs.count), onActiveSpace=\(activeWindowIDs.count), items=\(items.count)"
+        )
+        if items.isEmpty {
+            // No menu bar items were resolved. Log the raw window layers so we can tell
+            // whether enumeration returned nothing or the layer filter dropped everything.
+            let layers = activeWindowIDs.compactMap { WindowInfo(windowID: $0)?.layer }
+            Logger.itemManager.warning(
+                "No menu bar items resolved. statusLevel=\(kCGStatusWindowLevel), rawWindowIDs=\(windowIDs), activeLayers=\(layers)"
+            )
+        }
+
         let hiddenControlItem = items.firstIndex(of: .hiddenControlItem).map { items.remove(at: $0) }
         let alwaysHiddenControlItem = items.firstIndex(of: .alwaysHiddenControlItem).map { items.remove(at: $0) }
 
