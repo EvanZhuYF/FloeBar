@@ -70,6 +70,8 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 - **Adjustable Floe Bar background opacity** from 0–100%, while keeping menu
   bar icons crisp and fully opaque. The bar stays visible while you drag the
   slider so changes can be previewed live.
+- **Brand-matched menu bar icon.** New installations use the FloeBar App Icon's
+  background-free symbol by default; other icon choices remain available.
 - **Refreshed settings UI** — macOS semantic typography, continuous-corner
   cards, lighter section titles, and restrained SF Symbols with native spacing.
 - **Redesigned app icon** in the Apple squircle style.
@@ -77,7 +79,8 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 ### Localization
 
 - **English and Simplified Chinese**, following the macOS system language
-  automatically. Chinese is hand-translated, not machine output.
+  automatically. Chinese is hand-translated and uses the localized brand name
+  **浮岛**, not machine output.
 
 ### Distribution & privacy
 
@@ -124,8 +127,8 @@ more predictable for everyday use. On top of that baseline it adds or changes:
 
 Grab the latest build from the [Releases page](https://github.com/EvanZhuYF/FloeBar/releases/latest):
 
-- **`FloeBar-1.0.2-universal.zip`** — runs on any supported Mac (Apple Silicon + Intel). Pick this if unsure.
-- **`FloeBar-1.0.2-arm64.zip`** — smaller, Apple Silicon only.
+- **`FloeBar-1.0.3-universal.zip`** — runs on any supported Mac (Apple Silicon + Intel). Pick this if unsure.
+- **`FloeBar-1.0.3-arm64.zip`** — smaller, Apple Silicon only.
 
 Unzip it and move `FloeBar.app` into `/Applications`. The release builds are
 ad-hoc signed (not notarized), so on first launch macOS may block the app —
