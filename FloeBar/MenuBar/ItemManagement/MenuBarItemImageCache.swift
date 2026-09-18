@@ -13,7 +13,11 @@ final class MenuBarItemImageCache: ObservableObject {
         let pixelScale: CGFloat
 
         init?(cgImage: CGImage, pixelScale: CGFloat) {
-            guard pixelScale.isFinite, pixelScale > 0 else {
+            guard
+                pixelScale.isFinite,
+                pixelScale > 0,
+                !cgImage.isTransparent(maxAlpha: 0.02)
+            else {
                 return nil
             }
             self.cgImage = cgImage
@@ -111,7 +115,7 @@ final class MenuBarItemImageCache: ObservableObject {
     /// the given section.
     @MainActor
     func cacheFailed(for section: MenuBarSection.Name) -> Bool {
-        let items = appState?.itemManager.itemCache[section] ?? []
+        let items = appState?.itemManager.itemCache.managedItems(for: section) ?? []
         guard !items.isEmpty else {
             return false
         }
@@ -211,6 +215,13 @@ final class MenuBarItemImageCache: ObservableObject {
             )
             guard !Task.isCancelled else {
                 return nil
+            }
+            // On macOS 15, ScreenCaptureKit can return a successful but fully
+            // transparent image for visible menu bar items.
+            let sckCompositeIsTransparent =
+                compositeImage?.isTransparent(maxAlpha: 0.02) == true
+            if sckCompositeIsTransparent {
+                compositeImage = nil
             }
             if
                 compositeImage == nil,
@@ -461,16 +472,8 @@ final class MenuBarItemImageCache: ObservableObject {
         let isIceBarPresented = await appState.navigationState.isIceBarPresented
 
         if !isIceBarPresented {
-            guard await appState.navigationState.isAppFrontmost else {
-                logSkippingCache(reason: "Ice Bar not visible, app not frontmost")
-                return
-            }
-            guard await appState.navigationState.isSettingsPresented else {
-                logSkippingCache(reason: "Ice Bar not visible, Settings not visible")
-                return
-            }
-            guard case .menuBarLayout = await appState.navigationState.settingsNavigationIdentifier else {
-                logSkippingCache(reason: "Ice Bar not visible, Settings visible but not on Menu Bar Layout")
+            guard await appState.navigationState.settingsNavigationIdentifier == .menuBarLayout else {
+                logSkippingCache(reason: "Ice Bar not visible, menu bar layout not selected")
                 return
             }
         }
@@ -495,10 +498,11 @@ final class MenuBarItemImageCache: ObservableObject {
         }
 
         let isIceBarPresented = await appState.navigationState.isIceBarPresented
-        let isSettingsPresented = await appState.navigationState.isSettingsPresented
+        let isLayoutPaneSelected =
+            await appState.navigationState.settingsNavigationIdentifier == .menuBarLayout
 
         var sectionsNeedingDisplay = [MenuBarSection.Name]()
-        if isSettingsPresented {
+        if isLayoutPaneSelected {
             sectionsNeedingDisplay = MenuBarSection.Name.allCases
         } else if
             isIceBarPresented,

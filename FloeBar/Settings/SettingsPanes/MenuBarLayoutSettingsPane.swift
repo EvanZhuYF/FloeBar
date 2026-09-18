@@ -46,6 +46,13 @@ struct MenuBarLayoutSettingsPane: View {
                 layoutBar(for: section)
             }
         }
+        .task {
+            // Capture all sections in one generation. Separate per-section
+            // tasks invalidate each other's images through the shared cache.
+            await appState.imageCache.updateCacheWithoutChecks(
+                sections: MenuBarSection.Name.allCases
+            )
+        }
     }
 
     @ViewBuilder

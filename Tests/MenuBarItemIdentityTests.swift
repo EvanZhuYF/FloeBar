@@ -44,9 +44,10 @@ private enum MenuBarItemIdentityTests {
         try pendingNativeDragIntent()
         try actionabilityAndRetryPolicy()
         try interfaceWindowSelection()
+        try controlItemTitleRecognition()
         try displayFiltering()
         try uniqueRestoration()
-        print("PASS: 12 item identity regression groups")
+        print("PASS: 13 item identity regression groups")
     }
 
     private static func equalityAndCacheReplacement() throws {
@@ -294,9 +295,9 @@ private enum MenuBarItemIdentityTests {
             provisionalHosted.isSameWindow(as: resolvedHosted),
             "The same provisional item may acquire a resolved source"
         )
-        let control = MenuBarItem(itemWindow: WindowInfo(70, title: "hidden"))!
-        let replacement = MenuBarItem(itemWindow: WindowInfo(71, title: "hidden"))!
-        let duplicate = MenuBarItem(itemWindow: WindowInfo(72, title: "hidden"))!
+        let control = MenuBarItem(itemWindow: WindowInfo(70, title: "HItem"))!
+        let replacement = MenuBarItem(itemWindow: WindowInfo(71, title: "HItem"))!
+        let duplicate = MenuBarItem(itemWindow: WindowInfo(72, title: "HItem"))!
         try expect(MenuBarItem.matching(control, in: [replacement])?.windowID == 71, "Unique own controls may fall back by name")
         try expect(MenuBarItem.matching(control, in: [replacement, duplicate]) == nil, "Even control fallback must be unique")
     }
@@ -644,6 +645,37 @@ private enum MenuBarItemIdentityTests {
                 excluding: [popup.windowID]
             )?.windowID == newlyOpenedPopup.windowID,
             "Fallback scans must ignore interfaces visible before the item click"
+        )
+    }
+
+    private static func controlItemTitleRecognition() throws {
+        let legacyVisible = MenuBarItem(
+            itemWindow: WindowInfo(81, title: "SItem")
+        )!
+        let legacyHidden = MenuBarItem(
+            itemWindow: WindowInfo(82, title: "HItem")
+        )!
+        let legacyAlwaysHidden = MenuBarItem(
+            itemWindow: WindowInfo(83, title: "AHItem")
+        )!
+        let currentHidden = MenuBarItem(
+            itemWindow: WindowInfo(
+                84,
+                title: "FloeBar.ControlItem.Hidden"
+            )
+        )!
+        try expect(
+            legacyVisible.info == .iceIcon,
+            "Visible control item must keep legacy title compatibility"
+        )
+        try expect(
+            legacyHidden.info == .hiddenControlItem &&
+                currentHidden.info == .hiddenControlItem,
+            "Hidden control items must be recognized by legacy and current titles"
+        )
+        try expect(
+            legacyAlwaysHidden.info == .alwaysHiddenControlItem,
+            "Always-hidden control items must keep legacy title compatibility"
         )
     }
 

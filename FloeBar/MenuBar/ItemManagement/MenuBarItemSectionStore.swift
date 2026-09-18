@@ -94,6 +94,9 @@ final class MenuBarItemSectionStore {
 
     static let defaultsKey = "MenuBarItemSectionsV1"
     static let maxAutomaticallyLearnedItems = 256
+    private static let ignoredBundleIdentifierPrefixes = [
+        "local.floebar.smoke.",
+    ]
 
     private let defaults: UserDefaults
     private var sections: [Identity: Section] = [:]
@@ -110,6 +113,9 @@ final class MenuBarItemSectionStore {
                 throw StoreError.unsupportedVersion
             }
             for record in document.records {
+                guard !Self.shouldIgnore(record.identity) else {
+                    continue
+                }
                 guard
                     !record.identity.bundleIdentifier.isEmpty,
                     sections[record.identity] == nil
@@ -118,7 +124,9 @@ final class MenuBarItemSectionStore {
                 }
                 sections[record.identity] = record.section
             }
-            ambiguousGroups = document.ambiguousGroups ?? []
+            ambiguousGroups = (document.ambiguousGroups ?? []).filter {
+                !Self.shouldIgnore($0)
+            }
             // Older documents could store duplicate ordinals as independent intent.
             try noteIdentities(Array(sections.keys))
         } else if defaults.object(forKey: Self.defaultsKey) != nil {
@@ -127,7 +135,8 @@ final class MenuBarItemSectionStore {
     }
 
     func section(for identity: Identity) -> Section? {
-        guard !ambiguousGroups.contains(Group(identity)) else {
+        guard !Self.shouldIgnore(identity),
+              !ambiguousGroups.contains(Group(identity)) else {
             return nil
         }
         return sections[identity]
@@ -140,7 +149,10 @@ final class MenuBarItemSectionStore {
     /// Called only for an explicit user move, or before a temporary move.
     func remember(_ identity: Identity, in section: Section) throws {
         try noteIdentities([identity])
-        guard !identity.bundleIdentifier.isEmpty else {
+        guard
+            !identity.bundleIdentifier.isEmpty,
+            !Self.shouldIgnore(identity)
+        else {
             return
         }
         guard !ambiguousGroups.contains(Group(identity)) else {
@@ -160,7 +172,12 @@ final class MenuBarItemSectionStore {
     /// Record ambiguity before settling or excluding temporarily shown windows.
     /// Keep tombstones across launches so a later singleton cannot steal index zero.
     func noteIdentities(_ identities: [Identity]) throws {
-        let groups = Dictionary(grouping: identities.filter { !$0.bundleIdentifier.isEmpty }, by: Group.init)
+        let groups = Dictionary(
+            grouping: identities.filter {
+                !$0.bundleIdentifier.isEmpty && !Self.shouldIgnore($0)
+            },
+            by: Group.init
+        )
         let discovered = groups.compactMap { group, identities in
             identities.count > 1 || identities.contains(where: { $0.instanceIndex > 0 }) ? group : nil
         }
@@ -195,6 +212,7 @@ final class MenuBarItemSectionStore {
         attempts = attempts.filter { currentIdentities.contains($0.key) }
         let eligible = current.filter {
             !$0.identity.bundleIdentifier.isEmpty &&
+            !Self.shouldIgnore($0.identity) &&
             !ambiguousGroups.contains(Group($0.identity)) &&
             !excludedWindowIDs.contains($0.windowID)
         }
@@ -243,7 +261,10 @@ final class MenuBarItemSectionStore {
         _ updated: [Identity: Section],
         ambiguousGroups updatedGroups: Set<Group>? = nil
     ) throws {
-        let updatedGroups = updatedGroups ?? ambiguousGroups
+        let updated = updated.filter { !Self.shouldIgnore($0.key) }
+        let updatedGroups = (updatedGroups ?? ambiguousGroups).filter {
+            !Self.shouldIgnore($0)
+        }
         guard updated != sections || updatedGroups != ambiguousGroups else {
             return
         }
@@ -262,5 +283,17 @@ final class MenuBarItemSectionStore {
         defaults.set(data, forKey: Self.defaultsKey)
         sections = updated
         ambiguousGroups = updatedGroups
+    }
+
+    private static func shouldIgnore(_ identity: Identity) -> Bool {
+        ignoredBundleIdentifierPrefixes.contains {
+            identity.bundleIdentifier.hasPrefix($0)
+        }
+    }
+
+    private static func shouldIgnore(_ group: Group) -> Bool {
+        ignoredBundleIdentifierPrefixes.contains {
+            group.bundleIdentifier.hasPrefix($0)
+        }
     }
 }

@@ -42,10 +42,7 @@ final class MenuBarItemManager: ObservableObject {
                 }
 
                 if item.info.namespace == .ice {
-                    // Ice icon is the only item owned by Ice that should be included.
-                    guard item.info == .iceIcon else {
-                        return false
-                    }
+                    return false
                 }
 
                 return true

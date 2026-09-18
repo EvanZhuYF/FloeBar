@@ -24,10 +24,16 @@ final class ControlItem {
         }
 
         init?(recognizedTitle title: String) {
-            guard let identifier = Self(rawValue: title) else {
+            if let identifier = Self(rawValue: title) {
+                self = identifier
+                return
+            }
+            guard let legacyIdentifier = Self.allCases.first(where: {
+                $0.legacyRawValue == title
+            }) else {
                 return nil
             }
-            self = identifier
+            self = legacyIdentifier
         }
 
         static func isRecognizedTitle(_ title: String) -> Bool {

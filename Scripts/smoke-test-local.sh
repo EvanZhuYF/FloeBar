@@ -6,12 +6,59 @@ LANGUAGE="${2:-en}"
 TEMP_DIR="$(mktemp -d)"
 PID=""
 COPY=""
+MAIN_BUNDLE_ID="com.evanzhu.FloeBar"
+SMOKE_BUNDLE_PREFIX="local.floebar.smoke."
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+
+cleanup_smoke_section_records() {
+    local exported="$TEMP_DIR/main-defaults.plist"
+    local filtered="$TEMP_DIR/main-defaults-filtered.plist"
+    if ! defaults export "$MAIN_BUNDLE_ID" "$exported" >/dev/null 2>&1; then
+        return
+    fi
+    if /usr/bin/python3 - "$exported" "$filtered" "$SMOKE_BUNDLE_PREFIX" <<'PY'
+import json
+import plistlib
+import sys
+
+source_path, output_path, prefix = sys.argv[1:]
+with open(source_path, "rb") as f:
+    domain = plistlib.load(f)
+
+data = domain.get("MenuBarItemSectionsV1")
+if not isinstance(data, (bytes, bytearray)):
+    sys.exit(2)
+
+document = json.loads(data)
+records = document.get("records", [])
+filtered = [
+    record for record in records
+    if not record.get("identity", {}).get("bundleIdentifier", "").startswith(prefix)
+]
+if len(filtered) == len(records):
+    sys.exit(2)
+
+document["records"] = filtered
+domain["MenuBarItemSectionsV1"] = json.dumps(
+    document,
+    separators=(",", ":"),
+    sort_keys=True,
+).encode("utf-8")
+
+with open(output_path, "wb") as f:
+    plistlib.dump(domain, f)
+PY
+    then
+        defaults import "$MAIN_BUNDLE_ID" "$filtered" >/dev/null 2>&1 || true
+    fi
+}
+
 cleanup() {
     if [[ -n "$PID" ]]; then
         kill "$PID" 2>/dev/null || true
         wait "$PID" 2>/dev/null || true
     fi
+    cleanup_smoke_section_records
     if [[ -n "$COPY" && -d "$COPY" ]]; then
         "$LSREGISTER" -u "$COPY" >/dev/null 2>&1 || true
     fi

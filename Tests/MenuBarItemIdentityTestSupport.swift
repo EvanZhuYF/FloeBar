@@ -87,9 +87,31 @@ enum Bridging {
 }
 
 enum ControlItem {
-    enum Identifier: String {
-        case iceIcon, hidden, alwaysHidden
-        init?(recognizedTitle: String) { self.init(rawValue: recognizedTitle) }
+    enum Identifier: String, CaseIterable {
+        case iceIcon = "FloeBar.ControlItem.Visible"
+        case hidden = "FloeBar.ControlItem.Hidden"
+        case alwaysHidden = "FloeBar.ControlItem.AlwaysHidden"
+
+        private var legacyRawValue: String {
+            switch self {
+            case .iceIcon: "SItem"
+            case .hidden: "HItem"
+            case .alwaysHidden: "AHItem"
+            }
+        }
+
+        init?(recognizedTitle title: String) {
+            if let identifier = Self(rawValue: title) {
+                self = identifier
+                return
+            }
+            guard let legacyIdentifier = Self.allCases.first(where: {
+                $0.legacyRawValue == title
+            }) else {
+                return nil
+            }
+            self = legacyIdentifier
+        }
     }
 }
 

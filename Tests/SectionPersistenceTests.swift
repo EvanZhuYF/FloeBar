@@ -52,7 +52,8 @@ private enum SectionPersistenceTests {
         try boundedAutomaticLearning()
         try rejectAmbiguousOrdinalPersistence()
         try decodeLegacyIdentity()
-        print("PASS: 12 section persistence test groups")
+        try ignoreSmokeTestIdentities()
+        print("PASS: 13 section persistence test groups")
     }
 
     private static func bootstrapAndRelaunch() throws {
@@ -273,5 +274,28 @@ private enum SectionPersistenceTests {
         let store = try Store(defaults: defaults)
         let identity = Store.Identity(bundleIdentifier: "legacy.app", title: "Icon")
         try check(store.section(for: identity) == .hidden, "Legacy identities must decode as instance zero")
+    }
+
+    private static func ignoreSmokeTestIdentities() throws {
+        try withStore { store, defaults in
+            let smoke = Store.Identity(
+                bundleIdentifier: "local.floebar.smoke.test",
+                title: "HItem"
+            )
+            try store.remember(smoke, in: .hidden)
+            try check(store.section(for: smoke) == nil, "Smoke test items must not persist")
+
+            defaults.set(
+                Data(
+                    #"{"version":1,"records":[{"identity":{"bundleIdentifier":"local.floebar.smoke.test","title":"SItem"},"section":"visible"},{"identity":{"bundleIdentifier":"real.app","title":"Icon"},"section":"hidden"}]}"#.utf8
+                ),
+                forKey: Store.defaultsKey
+            )
+            let reloaded = try Store(defaults: defaults)
+            try check(reloaded.savedItemCount == 1, "Smoke records must be dropped on load")
+            let real = Store.Identity(bundleIdentifier: "real.app", title: "Icon")
+            try check(reloaded.section(for: real) == .hidden, "Non-smoke records must remain")
+            try check(reloaded.section(for: smoke) == nil, "Smoke records must not restore")
+        }
     }
 }
