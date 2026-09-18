@@ -6,6 +6,18 @@
         <description>Most recent updates to FloeBar.</description>
         <language>en</language>
         <item>
+            <title>1.0.5</title>
+            <sparkle:version>1226</sparkle:version>
+            <sparkle:shortVersionString>1.0.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <pubDate>Fri, 18 Sep 2026 06:43:56 +0000</pubDate>
+            <enclosure
+                url="https://github.com/EvanZhuYF/FloeBar/releases/download/v1.0.5/FloeBar-1.0.5-universal.zip"
+                sparkle:edSignature="dWqY5RvpgEAfxfNXAXrUi6MdG3U2rAac6QZLnHCpjVQYiTPiczELPZNcMBnY6VOiiN0+H/tFzT0RpdgS2ahcDw=="
+                length="4231065"
+                type="application/octet-stream" />
+        </item>
+        <item>
             <title>1.0.4</title>
             <sparkle:version>1223</sparkle:version>
             <sparkle:shortVersionString>1.0.4</sparkle:shortVersionString>
