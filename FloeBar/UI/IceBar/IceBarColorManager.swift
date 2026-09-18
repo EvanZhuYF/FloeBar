@@ -84,7 +84,7 @@ final class IceBarColorManager: ObservableObject {
                     guard isVisible else {
                         return Empty().eraseToAnyPublisher()
                     }
-                    return Timer.publish(every: 5, on: .main, in: .default)
+                    return Timer.publish(every: 15, on: .main, in: .default)
                         .autoconnect()
                         .mapToVoid()
                         .eraseToAnyPublisher()

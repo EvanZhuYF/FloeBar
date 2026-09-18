@@ -218,6 +218,12 @@ final class LayoutBarContainer: NSView {
         guard let sourceView = draggingInfo.draggingSource as? LayoutBarItemView else {
             return []
         }
+        guard
+            sourceView.item.info != .iceIcon ||
+                section.name == .visible
+        else {
+            return []
+        }
         switch phase {
         case .entered:
             if !arrangedViews.contains(sourceView) {

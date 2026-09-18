@@ -137,7 +137,7 @@ final class MenuBarManager: ObservableObject {
             }
             .store(in: &c)
 
-        Timer.publish(every: 5, on: .main, in: .default)
+        Timer.publish(every: 15, on: .main, in: .default)
             .autoconnect()
             .sink { [weak self] _ in
                 self?.updateAverageColorInfo()

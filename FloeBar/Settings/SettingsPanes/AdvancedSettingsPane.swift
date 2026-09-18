@@ -32,7 +32,9 @@ struct AdvancedSettingsPane: View {
         IceForm {
             IceSection {
                 hideApplicationMenus
-                showSectionDividers
+                if !appState.settingsManager.generalSettingsManager.useIceBar {
+                    showSectionDividers
+                }
                 showAllSectionsOnUserDrag
             }
             IceSection {

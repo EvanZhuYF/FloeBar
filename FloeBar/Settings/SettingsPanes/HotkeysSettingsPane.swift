@@ -20,7 +20,9 @@ struct HotkeysSettingsPane: View {
             }
             IceSection("Other") {
                 hotkeyRecorder(forAction: .enableIceBar)
-                hotkeyRecorder(forAction: .showSectionDividers)
+                if !appState.settingsManager.generalSettingsManager.useIceBar {
+                    hotkeyRecorder(forAction: .showSectionDividers)
+                }
                 hotkeyRecorder(forAction: .toggleApplicationMenus)
             }
         }

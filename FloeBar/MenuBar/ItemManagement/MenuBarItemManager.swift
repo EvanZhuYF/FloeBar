@@ -36,12 +36,12 @@ final class MenuBarItemManager: ObservableObject {
         /// Returns the cached menu bar items managed by Ice for the given section.
         func managedItems(for section: MenuBarSection.Name) -> [MenuBarItem] {
             self[section].filter { item in
-                // Filter out items that can't be hidden.
-                guard item.canBeHidden else {
-                    return false
+                if item.info.namespace == .ice {
+                    return section == .visible && item.info == .iceIcon
                 }
 
-                if item.info.namespace == .ice {
+                // Filter out items that can't be hidden.
+                guard item.canBeHidden else {
                     return false
                 }
 
@@ -819,12 +819,14 @@ extension MenuBarItemManager {
         guard !isRestoringSection, !isPerformingUserMove, !isTemporarilyShowingItem, !isMovingItem else {
             throw EventError(code: .couldNotComplete, item: item)
         }
+        let isVisibleControlItem = item.info == .iceIcon && section == .visible
         guard !persistenceIdentityPolicy.isAwaitingStableIdentity(item) else {
             throw EventError(code: .couldNotComplete, item: item)
         }
         guard
             item.isMovable,
-            persistenceIdentityPolicy.eligibleIdentity(for: item) != nil
+            isVisibleControlItem ||
+                persistenceIdentityPolicy.eligibleIdentity(for: item) != nil
         else {
             throw EventError(code: .notMovable, item: item)
         }
@@ -1242,6 +1244,36 @@ extension MenuBarItemManager {
             frame.width > 0 && frame.height > 0 &&
             frame.minX.isFinite && frame.minY.isFinite &&
             frame.maxX.isFinite && frame.maxY.isFinite
+    }
+
+    private func waitForCorrectPosition(
+        item: MenuBarItem,
+        destination: MoveDestination,
+        timeout: Duration
+    ) async throws -> MenuBarItem {
+        let positionTask = Task(timeout: timeout) {
+            while true {
+                try Task.checkCancellation()
+                guard let endpoints = await self.refreshedMoveEndpoints(
+                    item: item,
+                    destination: destination
+                ) else {
+                    throw EventError(code: .invalidItem, item: item)
+                }
+                if await self.itemHasCorrectPosition(
+                    item: endpoints.item,
+                    for: endpoints.destination
+                ) {
+                    return endpoints.item
+                }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+        }
+        do {
+            return try await positionTask.value
+        } catch is TaskTimeoutError {
+            throw EventError(code: .couldNotComplete, item: item)
+        }
     }
 
     private func moveFailureKind(for error: any Error) -> MenuBarItemMoveFailureKind {
@@ -1753,19 +1785,12 @@ extension MenuBarItemManager {
                     endpoints.item,
                     to: endpoints.destination
                 )
-                guard let current = refreshedMoveEndpoints(
+                let currentItem = try await waitForCorrectPosition(
                     item: item,
-                    destination: destination
-                ) else {
-                    throw EventError(code: .invalidItem, item: item)
-                }
-                guard itemHasCorrectPosition(
-                    item: current.item,
-                    for: current.destination
-                ) else {
-                    throw EventError(code: .couldNotComplete, item: item)
-                }
-                Logger.itemManager.info("Successfully moved \(current.item.logString)")
+                    destination: destination,
+                    timeout: .milliseconds(250)
+                )
+                Logger.itemManager.info("Successfully moved \(currentItem.logString)")
                 return
             } catch {
                 Logger.itemManager.warning("Attempt \(n) to move \(item.logString) failed (error: \(error))")
@@ -1816,27 +1841,13 @@ extension MenuBarItemManager {
             itemMoveCount -= 1
         }
         try await move(item: item, to: destination, maxAttempts: maxAttempts)
-        let waitTask = Task(timeout: timeout) {
-            while true {
-                try Task.checkCancellation()
-                guard let endpoints = await self.refreshedMoveEndpoints(
-                    item: item,
-                    destination: destination
-                ) else {
-                    throw EventError(code: .invalidItem, item: item)
-                }
-                if await self.itemHasCorrectPosition(
-                    item: endpoints.item,
-                    for: endpoints.destination
-                ) {
-                    return
-                }
-                try await Task.sleep(for: .milliseconds(10))
-            }
-        }
         do {
-            try await waitTask.value
-        } catch is TaskTimeoutError {
+            _ = try await waitForCorrectPosition(
+                item: item,
+                destination: destination,
+                timeout: timeout
+            )
+        } catch let error as EventError where error.code == .couldNotComplete {
             throw EventError(code: .otherTimeout, item: item)
         }
     }

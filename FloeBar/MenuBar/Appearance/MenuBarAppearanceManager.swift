@@ -170,7 +170,7 @@ final class MenuBarAppearanceManager: ObservableObject {
         guard periodicRefreshCancellable == nil else {
             return
         }
-        periodicRefreshCancellable = Timer.publish(every: 10, on: .main, in: .default)
+        periodicRefreshCancellable = Timer.publish(every: 30, on: .main, in: .default)
             .autoconnect()
             .sink { [weak self] _ in
                 self?.performPeriodicRefresh()

@@ -7,7 +7,7 @@
 # everything to the matching GitHub release tag.
 #
 # Usage:
-#   MARKETING_VERSION=1.0.6 CURRENT_PROJECT_VERSION=1233 bash Scripts/release.sh
+#   MARKETING_VERSION=1.0.7 CURRENT_PROJECT_VERSION=1237 bash Scripts/release.sh
 #
 # Env:
 #   MARKETING_VERSION        Required. Marketing version, e.g. 1.0.3.

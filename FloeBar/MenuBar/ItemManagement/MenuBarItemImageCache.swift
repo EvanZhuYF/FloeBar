@@ -53,8 +53,14 @@ final class MenuBarItemImageCache: ObservableObject {
     /// Coalesces timer and notification bursts into the latest cache refresh.
     private var scheduledUpdateTask: Task<Void, Never>?
 
+    /// Prevents periodic refresh work from overlapping a previous timer tick.
+    private var periodicUpdateTask: Task<Void, Never>?
+
     /// Only the latest refresh may publish captured images.
     private var updateGeneration = 0
+
+    /// Avoids repeatedly probing a transparent ScreenCaptureKit result on macOS 15.
+    private var visibleItemsRequireLegacyCapture = false
 
     /// Creates a cache with the given app state.
     init(appState: AppState) {
@@ -73,10 +79,20 @@ final class MenuBarItemImageCache: ObservableObject {
         var c = Set<AnyCancellable>()
 
         if let appState {
-            Publishers.Merge3(
-                // Update every 3 seconds at minimum.
-                Timer.publish(every: 3, on: .main, in: .default).autoconnect().mapToVoid(),
+            Timer.publish(every: 15, on: .main, in: .default)
+                .autoconnect()
+                .sink { [weak self] _ in
+                    guard let self else {
+                        return
+                    }
+                    periodicUpdateTask?.cancel()
+                    periodicUpdateTask = Task.detached { [weak self] in
+                        await self?.updateCacheForTimer()
+                    }
+                }
+                .store(in: &c)
 
+            Publishers.Merge(
                 // Update when the active space or screen parameters change.
                 Publishers.Merge(
                     NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.activeSpaceDidChangeNotification),
@@ -209,12 +225,26 @@ final class MenuBarItemImageCache: ObservableObject {
 
         var compositeImage: CGImage?
         if section == .visible {
-            compositeImage = await ScreenCapture.captureWindowsOnScreen(
-                windowIDs,
-                option: option
-            )
-            guard !Task.isCancelled else {
-                return nil
+            let shouldTryScreenCaptureKit: Bool
+            if #available(macOS 15.0, *) {
+                if #unavailable(macOS 26.0) {
+                    shouldTryScreenCaptureKit = await MainActor.run {
+                        !visibleItemsRequireLegacyCapture
+                    }
+                } else {
+                    shouldTryScreenCaptureKit = true
+                }
+            } else {
+                shouldTryScreenCaptureKit = true
+            }
+            if shouldTryScreenCaptureKit {
+                compositeImage = await ScreenCapture.captureWindowsOnScreen(
+                    windowIDs,
+                    option: option
+                )
+                guard !Task.isCancelled else {
+                    return nil
+                }
             }
             // On macOS 15, ScreenCaptureKit can return a successful but fully
             // transparent image for visible menu bar items.
@@ -222,6 +252,13 @@ final class MenuBarItemImageCache: ObservableObject {
                 compositeImage?.isTransparent(maxAlpha: 0.02) == true
             if sckCompositeIsTransparent {
                 compositeImage = nil
+                if #available(macOS 15.0, *) {
+                    if #unavailable(macOS 26.0) {
+                        await MainActor.run {
+                            visibleItemsRequireLegacyCapture = true
+                        }
+                    }
+                }
             }
             if
                 compositeImage == nil,
@@ -465,15 +502,16 @@ final class MenuBarItemImageCache: ObservableObject {
 
     /// Updates the cache for the given sections, if necessary.
     func updateCache(sections: [MenuBarSection.Name]) async {
-        guard let appState else {
+        guard let appState, !sections.isEmpty else {
             return
         }
 
         let isIceBarPresented = await appState.navigationState.isIceBarPresented
+        let isLayoutPanePresented = await isMenuBarLayoutPresented(in: appState)
 
         if !isIceBarPresented {
-            guard await appState.navigationState.settingsNavigationIdentifier == .menuBarLayout else {
-                logSkippingCache(reason: "Ice Bar not visible, menu bar layout not selected")
+            guard isLayoutPanePresented else {
+                logSkippingCache(reason: "neither Ice Bar nor menu bar layout is visible")
                 return
             }
         }
@@ -491,6 +529,21 @@ final class MenuBarItemImageCache: ObservableObject {
         await updateCacheWithoutChecks(sections: sections)
     }
 
+    /// Updates dynamic item images while the Ice Bar is visible.
+    private func updateCacheForTimer() async {
+        guard let appState else {
+            return
+        }
+        let isIceBarPresented = await appState.navigationState.isIceBarPresented
+        guard
+            isIceBarPresented,
+            let section = await appState.menuBarManager.iceBarPanel.currentSection
+        else {
+            return
+        }
+        await updateCache(sections: [section])
+    }
+
     /// Updates the cache for all sections, if necessary.
     func updateCache() async {
         guard let appState else {
@@ -498,11 +551,10 @@ final class MenuBarItemImageCache: ObservableObject {
         }
 
         let isIceBarPresented = await appState.navigationState.isIceBarPresented
-        let isLayoutPaneSelected =
-            await appState.navigationState.settingsNavigationIdentifier == .menuBarLayout
+        let isLayoutPanePresented = await isMenuBarLayoutPresented(in: appState)
 
         var sectionsNeedingDisplay = [MenuBarSection.Name]()
-        if isLayoutPaneSelected {
+        if isLayoutPanePresented {
             sectionsNeedingDisplay = MenuBarSection.Name.allCases
         } else if
             isIceBarPresented,
@@ -512,6 +564,16 @@ final class MenuBarItemImageCache: ObservableObject {
         }
 
         await updateCache(sections: sectionsNeedingDisplay)
+    }
+
+    @MainActor
+    private func isMenuBarLayoutPresented(in appState: AppState) -> Bool {
+        guard appState.navigationState.settingsNavigationIdentifier == .menuBarLayout else {
+            return false
+        }
+        return NSApp.windows.contains {
+            $0.identifier?.rawValue == Constants.settingsWindowID && $0.isVisible
+        }
     }
 }
 

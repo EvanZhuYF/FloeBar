@@ -45,9 +45,10 @@ private enum MenuBarItemIdentityTests {
         try actionabilityAndRetryPolicy()
         try interfaceWindowSelection()
         try controlItemTitleRecognition()
+        try visibleControlItemLayoutBehavior()
         try displayFiltering()
         try uniqueRestoration()
-        print("PASS: 13 item identity regression groups")
+        print("PASS: 14 item identity regression groups")
     }
 
     private static func equalityAndCacheReplacement() throws {
@@ -676,6 +677,23 @@ private enum MenuBarItemIdentityTests {
         try expect(
             legacyAlwaysHidden.info == .alwaysHiddenControlItem,
             "Always-hidden control items must keep legacy title compatibility"
+        )
+    }
+
+    private static func visibleControlItemLayoutBehavior() throws {
+        let visibleControl = MenuBarItem(
+            itemWindow: WindowInfo(
+                85,
+                title: "FloeBar.ControlItem.Visible"
+            )
+        )!
+        try expect(
+            visibleControl.isMovable && visibleControl.canBeHidden,
+            "The visible control item must remain physically movable"
+        )
+        try expect(
+            visibleControl.sectionIdentity == nil,
+            "The visible control item must use status-item autosave, not app section persistence"
         )
     }
 
