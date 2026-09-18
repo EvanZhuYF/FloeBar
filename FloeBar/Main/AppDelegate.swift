@@ -29,6 +29,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Logger.appDelegate.warning("Missing app state in applicationDidFinishLaunching")
             return
         }
+        if ProcessInfo.processInfo.arguments.contains("--verify-embedded-services") {
+            Task {
+                let identityService =
+                    await MenuBarItemSourcePIDResolver.shared
+                        .verifyServiceConnection()
+                let captureService =
+                    await MenuBarCaptureServiceConnection.shared
+                        .verifyServiceConnection()
+                let passed = identityService && captureService
+                print(
+                    passed
+                        ? "PASS: production embedded XPC connections"
+                        : "FAIL: production embedded XPC connections"
+                )
+                fflush(stdout)
+                exit(passed ? EXIT_SUCCESS : EXIT_FAILURE)
+            }
+            return
+        }
 
         // Dismiss the windows.
         appState.dismissSettingsWindow()

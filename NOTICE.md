@@ -12,13 +12,21 @@ Copyright (C) 2024 Jordan Baird
 https://github.com/jordanbaird/Ice
 Licensed under the GNU General Public License v3.0.
 
+Additional macOS compatibility reference
+-----------------------------------------
+Thaw
+Copyright (C) 2026 Toni Förster
+https://github.com/stonerl/Thaw
+Licensed under the GNU General Public License v3.0.
+
 Modifications
 -------------
 FloeBar
 Copyright (C) 2026 Evan Zhu
 
 FloeBar is based on Ice 0.12.0 and includes changes such as menu bar section
-persistence, stability and memory optimizations, removal of the search feature,
+persistence, macOS 26 source-process identity recovery informed by Thaw,
+stability and memory optimizations, removal of the search feature,
 English/Simplified Chinese localization, a redesigned application icon, and a
 rebrand to FloeBar with its own bundle identifier. The upstream Sparkle update
 feed has been removed so FloeBar cannot update itself from official Ice releases.

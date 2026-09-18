@@ -9,11 +9,29 @@ import Cocoa
 
 /// A representation of an item in the menu bar.
 struct MenuBarItem {
+    struct OperationEndpoints {
+        let item: MenuBarItem
+        let target: MenuBarItem
+    }
+
+    /// A snapshot identity. Duplicate ordinals are not stable across enumerations.
+    struct Identity: Hashable {
+        let info: MenuBarItemInfo
+        let sourcePID: pid_t?
+        let instanceIndex: Int
+    }
+
     /// The item's window.
     let window: WindowInfo
 
     /// The menu bar item info associated with this item.
     let info: MenuBarItemInfo
+
+    /// The process that created the status item.
+    let sourcePID: pid_t?
+
+    /// The item's snapshot index among items with the same source and title.
+    let instanceIndex: Int
 
     /// The identifier of the item's window.
     var windowID: CGWindowID {
@@ -38,13 +56,16 @@ struct MenuBarItem {
     /// A Boolean value that indicates whether the item can be moved.
     var isMovable: Bool {
         let immovableItems = Set(MenuBarItemInfo.immovableItems)
-        return !immovableItems.contains(info)
+        return !hasProvisionalIdentity &&
+            !immovableItems.contains(info) && !info.isBentoBox &&
+            !info.isMisattributedControlCenterModule &&
+            !isTransientControlCenterItem
     }
 
     /// A Boolean value that indicates whether the item can be hidden.
     var canBeHidden: Bool {
         let nonHideableItems = Set(MenuBarItemInfo.nonHideableItems)
-        return !nonHideableItems.contains(info)
+        return isMovable && !nonHideableItems.contains(info)
     }
 
     /// The process identifier of the application that owns the item.
@@ -65,28 +86,60 @@ struct MenuBarItem {
         window.owningApplication
     }
 
+    /// The application that created the item. On macOS 26 this commonly
+    /// differs from ``owningApplication``, which is Control Center.
+    var sourceApplication: NSRunningApplication? {
+        guard let sourcePID else {
+            return nil
+        }
+        return NSRunningApplication(processIdentifier: sourcePID)
+    }
+
+    /// The source identity in this snapshot, not a cross-window matching key.
+    var identity: Identity {
+        Identity(
+            info: info,
+            sourcePID: sourcePID,
+            instanceIndex: instanceIndex
+        )
+    }
+
+    /// Whether the item's source application is still unknown on macOS 26.
+    var hasProvisionalIdentity: Bool {
+        // The source cache supplies ownerPID on older systems; unresolved hosted
+        // identity is a property of this snapshot, not the OS reading it.
+        return sourcePID == nil && info.namespace == .controlCenter
+    }
+
+    /// A short-lived Control Center item that should not enter layout state.
+    var isTransientControlCenterItem: Bool {
+        info.isGenericControlCenterItem && sourcePID != nil &&
+            sourceApplication?.bundleIdentifier == MenuBarItemInfo.Namespace.controlCenter.rawValue
+    }
+
     /// A name associated with the item that is suited for display to
     /// the user.
     var displayName: String {
         var fallback: String { "Unknown" }
-        guard let owningApplication else {
+        let application = sourceApplication ?? owningApplication
+        guard let application else {
             return ownerName ?? title ?? fallback
         }
         var bestName: String {
-            owningApplication.localizedName ??
+            application.localizedName ??
             ownerName ??
-            owningApplication.bundleIdentifier ??
+            application.bundleIdentifier ??
             fallback
         }
         guard let title else {
             return bestName
         }
         // by default, use the application name, but handle a few special cases
-        return switch MenuBarItemInfo.Namespace(owningApplication.bundleIdentifier) {
+        return switch info.namespace {
         case .controlCenter:
             switch title {
             case "AccessibilityShortcuts": String(localized: "Accessibility Shortcuts")
-            case "BentoBox": bestName // Control Center
+            case let value where value.hasPrefix("BentoBox"): bestName // Control Center
             case "FocusModes": String(localized: "Focus")
             case "KeyboardBrightness": String(localized: "Keyboard Brightness")
             case "MusicRecognition": String(localized: "Music Recognition")
@@ -118,7 +171,11 @@ struct MenuBarItem {
 
     /// A string to use for logging purposes.
     var logString: String {
-        String(describing: info)
+        var value = String(describing: info)
+        if instanceIndex > 0 {
+            value += ":\(instanceIndex)"
+        }
+        return "\(value) [windowID=\(windowID), ownerPID=\(ownerPID), sourcePID=\(sourcePID.map(String.init) ?? "nil")]"
     }
 
     /// Creates a menu bar item from the given window.
@@ -126,9 +183,18 @@ struct MenuBarItem {
     /// This initializer does not perform any checks on the window to ensure that
     /// it is a valid menu bar item window. Only call this initializer if you are
     /// certain that the window is valid.
-    private init(uncheckedItemWindow itemWindow: WindowInfo) {
+    private init(
+        uncheckedItemWindow itemWindow: WindowInfo,
+        sourcePID: pid_t?,
+        instanceIndex: Int = 0
+    ) {
         self.window = itemWindow
-        self.info = MenuBarItemInfo(uncheckedItemWindow: itemWindow)
+        self.info = MenuBarItemInfo(
+            uncheckedItemWindow: itemWindow,
+            sourcePID: sourcePID
+        )
+        self.sourcePID = sourcePID
+        self.instanceIndex = instanceIndex
     }
 
     /// Creates a menu bar item.
@@ -142,7 +208,10 @@ struct MenuBarItem {
         guard itemWindow.isMenuBarItem else {
             return nil
         }
-        self.init(uncheckedItemWindow: itemWindow)
+        self.init(
+            uncheckedItemWindow: itemWindow,
+            sourcePID: MenuBarItemSourcePIDCache.shared.sourcePID(for: itemWindow)
+        )
     }
 
     /// Creates a menu bar item with the given window identifier.
@@ -159,6 +228,133 @@ struct MenuBarItem {
         }
         self.init(itemWindow: window)
     }
+
+    /// Re-reads this exact window for an operation that must not act on a
+    /// stale or recycled WindowServer identifier.
+    func refreshedForOperation() -> MenuBarItem? {
+        guard
+            let window = WindowInfo(windowID: windowID),
+            window.isMenuBarItem
+        else {
+            return nil
+        }
+        let refreshed = MenuBarItem(
+            uncheckedItemWindow: window,
+            sourcePID: MenuBarItemSourcePIDCache.shared.sourcePID(for: window),
+            instanceIndex: instanceIndex
+        )
+        return Self.exactlyMatching(self, in: [refreshed])
+    }
+
+    /// Matches this snapshot to a newer snapshot of the same live window.
+    /// Only an older provisional identity may transition to a resolved one.
+    func isSameWindow(as current: MenuBarItem) -> Bool {
+        guard
+            windowID == current.windowID,
+            ownerPID == current.ownerPID,
+            title == current.title
+        else {
+            return false
+        }
+        if hasProvisionalIdentity {
+            return true
+        }
+        guard !current.hasProvisionalIdentity else {
+            return false
+        }
+        return sourcePID == current.sourcePID && info == current.info
+    }
+
+    /// Application titles/ordinals do not identify a replacement window. Only our
+    /// own uniquely named controls have a cross-window fallback.
+    static func matching(_ target: MenuBarItem, in items: [MenuBarItem]) -> MenuBarItem? {
+        if let exact = items.first(where: { $0.windowID == target.windowID }) {
+            return exactlyMatching(target, in: [exact])
+        }
+        guard [.iceIcon, .hiddenControlItem, .alwaysHiddenControlItem].contains(target.info) else {
+            return nil
+        }
+        let candidates = items.filter { $0.info == target.info && $0.ownerPID == target.ownerPID }
+        return candidates.count == 1 ? candidates.first : nil
+    }
+
+    /// Finds the same live window, allowing only provisional-to-stable source
+    /// resolution to change its identity.
+    static func exactlyMatching(
+        _ target: MenuBarItem,
+        in items: [MenuBarItem]
+    ) -> MenuBarItem? {
+        guard
+            let current = items.first(where: { $0.windowID == target.windowID }),
+            current.ownerPID == target.ownerPID,
+            current.title == target.title
+        else {
+            return nil
+        }
+        if target.hasProvisionalIdentity {
+            return current
+        }
+        guard
+            !current.hasProvisionalIdentity,
+            current.sourcePID == target.sourcePID,
+            current.info == target.info
+        else {
+            return nil
+        }
+        return current
+    }
+
+    /// Validates both move endpoints from one coherent window-description batch.
+    static func operationEndpoints(
+        item: MenuBarItem,
+        target: MenuBarItem,
+        in windows: [WindowInfo]
+    ) -> OperationEndpoints? {
+        guard item.windowID != target.windowID else {
+            return nil
+        }
+        let items = getMenuBarItems(from: windows)
+        guard
+            let currentItem = exactlyMatching(item, in: items),
+            let currentTarget = exactlyMatching(target, in: items)
+        else {
+            return nil
+        }
+        return OperationEndpoints(item: currentItem, target: currentTarget)
+    }
+
+    static func isInterfaceWindow(
+        _ window: WindowInfo,
+        ownedBy pids: Set<pid_t>
+    ) -> Bool {
+        guard pids.contains(window.ownerPID), window.isOnScreen else {
+            return false
+        }
+        let level = CGWindowLevel(Int32(window.layer))
+        if level == CGWindowLevelForKey(.popUpMenuWindow) ||
+            level == CGWindowLevelForKey(.popUpMenuWindow) - 1
+        {
+            return true
+        }
+        if
+            level == CGWindowLevelForKey(.statusWindow) ||
+            level == CGWindowLevelForKey(.mainMenuWindow)
+        {
+            return window.frame.height > 40
+        }
+        return false
+    }
+
+    static func firstInterfaceWindow(
+        in windows: [WindowInfo],
+        ownedBy pids: Set<pid_t>,
+        excluding windowIDs: Set<CGWindowID> = []
+    ) -> WindowInfo? {
+        windows.first {
+            !windowIDs.contains($0.windowID) &&
+                isInterfaceWindow($0, ownedBy: pids)
+        }
+    }
 }
 
 // MARK: MenuBarItem Getters
@@ -169,17 +365,95 @@ extension MenuBarItem {
         on display: CGDirectDisplayID? = nil,
         excludeUntitled: Bool = false
     ) -> [MenuBarItem] {
-        let displayBounds = display.map(CGDisplayBounds)
-        return windowIDs.lazy
-            .filter { windowID in
-                guard let displayBounds else {
-                    return true
-                }
-                return Bridging.getWindowFrame(for: windowID).map(displayBounds.intersects) ?? false
+        getMenuBarItems(
+            from: WindowInfo.createWindows(from: windowIDs),
+            on: display,
+            excludeUntitled: excludeUntitled
+        )
+    }
+
+    /// Returns menu bar items for already-created window descriptions.
+    static func getMenuBarItems(
+        from windows: [WindowInfo],
+        on display: CGDirectDisplayID? = nil,
+        excludeUntitled: Bool = false
+    ) -> [MenuBarItem] {
+        let baseItems = windows.compactMap { window -> MenuBarItem? in
+            guard window.isMenuBarItem else {
+                return nil
             }
-            .compactMap { MenuBarItem(windowID: $0) }
-            .filter { !excludeUntitled || $0.title != "" }
-            .sortedByOrderInMenuBar()
+            let sourcePID = MenuBarItemSourcePIDCache.shared.sourcePID(for: window)
+            return MenuBarItem(
+                uncheckedItemWindow: window,
+                sourcePID: sourcePID
+            )
+        }
+
+        // Assign snapshot ordinals before display filtering. Persistence separately
+        // quarantines every same-bundle/title group ever observed as ambiguous.
+        var instanceIndices = [CGWindowID: Int]()
+        let groups = Dictionary(grouping: baseItems.indices, by: { baseItems[$0].info })
+        for indices in groups.values where indices.count > 1 {
+            let sorted = indices.sorted {
+                baseItems[$0].windowID < baseItems[$1].windowID
+            }
+            for (instanceIndex, itemIndex) in sorted.enumerated() {
+                instanceIndices[baseItems[itemIndex].windowID] = instanceIndex
+            }
+        }
+
+        var displayBounds = [CGDirectDisplayID: CGRect]()
+        if let display {
+            for screen in NSScreen.screens {
+                displayBounds[screen.displayID] = CGDisplayBounds(screen.displayID)
+            }
+            displayBounds[display] = CGDisplayBounds(display)
+        }
+        return baseItems.compactMap { item in
+            if let display, !belongsToDisplay(
+                frame: item.frame,
+                isOnScreen: item.isOnScreen,
+                display: display,
+                bounds: displayBounds,
+                isOnCurrentSpace: { Bridging.isWindow(item.windowID, onCurrentSpaceOf: $0) }
+            ) {
+                return nil
+            }
+            guard !excludeUntitled || item.title != "" else {
+                return nil
+            }
+            return MenuBarItem(
+                uncheckedItemWindow: item.window,
+                sourcePID: item.sourcePID,
+                instanceIndex: instanceIndices[item.windowID, default: 0]
+            )
+        }
+        .sortedByOrderInMenuBar()
+    }
+
+    static func belongsToDisplay(
+        frame: CGRect,
+        isOnScreen: Bool,
+        display: CGDirectDisplayID,
+        bounds: [CGDirectDisplayID: CGRect],
+        isOnCurrentSpace: (CGDirectDisplayID) -> Bool
+    ) -> Bool {
+        guard let target = bounds[display] else {
+            return false
+        }
+        if isOnScreen || bounds.values.contains(where: { $0.intersects(frame) }) {
+            return target.intersects(frame)
+        }
+        // A vertical lane alone cannot distinguish side-by-side displays.
+        let lanes = bounds.filter { frame.midY >= $0.value.minY && frame.midY < $0.value.maxY }
+        guard lanes[display] != nil else {
+            return false
+        }
+        if lanes.count == 1 {
+            return true
+        }
+        let spaceMatches = lanes.keys.filter(isOnCurrentSpace)
+        return spaceMatches.count == 1 && spaceMatches.first == display
     }
 
     /// Returns an array of the current menu bar items in the menu bar on the given display.
@@ -195,34 +469,37 @@ extension MenuBarItem {
         var option: Bridging.WindowListOption = [.menuBarItems]
 
         var titlePredicate: (MenuBarItem) -> Bool = { _ in true }
-        var boundsPredicate: (CGWindowID) -> Bool = { _ in true }
 
         if onScreenOnly {
             option.insert(.onScreen)
         }
         if activeSpaceOnly {
-            option.insert(.activeSpace)
             titlePredicate = { $0.title != "" }
-        }
-        if let display {
-            let displayBounds = CGDisplayBounds(display)
-            boundsPredicate = { windowID in
-                guard let windowFrame = Bridging.getWindowFrame(for: windowID) else {
-                    return false
-                }
-                return displayBounds.intersects(windowFrame)
+            if display == nil {
+                option.insert(.activeSpace)
             }
         }
 
-        let windowIDs = Bridging.getWindowList(option: option).filter(boundsPredicate)
-        return getMenuBarItems(from: windowIDs).filter(titlePredicate)
+        var windowIDs = Bridging.getWindowList(option: option)
+        if activeSpaceOnly, let display {
+            windowIDs = windowIDs.filter {
+                Bridging.isWindow($0, onCurrentSpaceOf: display)
+            }
+        }
+        return getMenuBarItems(
+            from: windowIDs,
+            on: display
+        ).filter(titlePredicate)
     }
 }
 
 // MARK: MenuBarItem: Equatable
 extension MenuBarItem: Equatable {
     static func == (lhs: MenuBarItem, rhs: MenuBarItem) -> Bool {
-        lhs.window == rhs.window
+        lhs.window == rhs.window &&
+        lhs.info == rhs.info &&
+        lhs.sourcePID == rhs.sourcePID &&
+        lhs.instanceIndex == rhs.instanceIndex
     }
 }
 
@@ -230,6 +507,9 @@ extension MenuBarItem: Equatable {
 extension MenuBarItem: Hashable {
     func hash(into hasher: inout Hasher) {
         hasher.combine(window)
+        hasher.combine(info)
+        hasher.combine(sourcePID)
+        hasher.combine(instanceIndex)
     }
 }
 
@@ -240,8 +520,8 @@ private extension MenuBarItemInfo {
     /// This initializer does not perform any checks on the window to ensure that
     /// it is a valid menu bar item window. Only call this initializer if you are
     /// certain that the window is valid.
-    init(uncheckedItemWindow itemWindow: WindowInfo) {
-        switch itemWindow.title.flatMap(ControlItem.Identifier.init(rawValue:)) {
+    init(uncheckedItemWindow itemWindow: WindowInfo, sourcePID: pid_t?) {
+        switch itemWindow.title.flatMap(ControlItem.Identifier.init(recognizedTitle:)) {
         case .iceIcon:
             self = .iceIcon
             return
@@ -255,7 +535,12 @@ private extension MenuBarItemInfo {
             break
         }
 
-        if let bundleIdentifier = itemWindow.owningApplication?.bundleIdentifier {
+        if let sourcePID {
+            let sourceApplication = NSRunningApplication(
+                processIdentifier: sourcePID
+            )
+            self.namespace = Namespace(sourceApplication?.bundleIdentifier)
+        } else if let bundleIdentifier = itemWindow.owningApplication?.bundleIdentifier {
             self.namespace = Namespace(bundleIdentifier)
         } else {
             self.namespace = .null

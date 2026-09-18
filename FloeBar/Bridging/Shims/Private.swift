@@ -52,6 +52,11 @@ func CGSSetConnectionProperty(
     _ value: CFTypeRef
 ) -> CGError
 
+@_silgen_name("CGSCopyActiveMenuBarDisplayIdentifier")
+func CGSCopyActiveMenuBarDisplayIdentifier(
+    _ cid: CGSConnectionID
+) -> Unmanaged<CFString>?
+
 // MARK: - CGSEvent Functions
 
 @_silgen_name("CGSEventIsAppUnresponsive")
@@ -64,6 +69,12 @@ func CGSEventIsAppUnresponsive(
 
 @_silgen_name("CGSGetActiveSpace")
 func CGSGetActiveSpace(_ cid: CGSConnectionID) -> CGSSpaceID
+
+@_silgen_name("CGSManagedDisplayGetCurrentSpace")
+func CGSManagedDisplayGetCurrentSpace(
+    _ cid: CGSConnectionID,
+    _ displayUUID: CFString
+) -> CGSSpaceID
 
 @_silgen_name("CGSCopySpacesForWindows")
 func CGSCopySpacesForWindows(

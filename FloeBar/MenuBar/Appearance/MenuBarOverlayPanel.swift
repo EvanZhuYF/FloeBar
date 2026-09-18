@@ -66,6 +66,9 @@ final class MenuBarOverlayPanel: NSPanel {
     /// The current desktop wallpaper, clipped to the bounds of the menu bar.
     @Published private(set) var desktopWallpaper: CGImage?
 
+    /// The Space represented by ``desktopWallpaper``.
+    private var desktopWallpaperSpaceID: CGSSpaceID?
+
     /// Storage for internal observers.
     private var cancellables = Set<AnyCancellable>()
 
@@ -302,10 +305,20 @@ final class MenuBarOverlayPanel: NSPanel {
     /// Stores the area of the desktop wallpaper that is under the menu bar
     /// of the given display.
     private func updateDesktopWallpaper(for display: CGDirectDisplayID, with windows: [WindowInfo]) {
+        let currentSpaceID = Bridging.currentSpaceID(for: display)
+        if desktopWallpaperSpaceID != currentSpaceID {
+            desktopWallpaper = nil
+            desktopWallpaperSpaceID = currentSpaceID
+        }
         guard
             let wallpaperWindow = WindowInfo.getWallpaperWindow(from: windows, for: display),
             let menuBarWindow = WindowInfo.getMenuBarWindow(from: windows, for: display)
         else {
+            return
+        }
+        guard ScreenCapture.claimLegacyCapture(
+            for: "overlay-wallpaper-\(display)"
+        ) else {
             return
         }
         let wallpaper = ScreenCapture.captureWindow(wallpaperWindow.windowID, screenBounds: menuBarWindow.frame)

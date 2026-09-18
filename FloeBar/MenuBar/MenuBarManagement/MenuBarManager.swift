@@ -170,7 +170,7 @@ final class MenuBarManager: ObservableObject {
                 }
 
                 if sections.contains(where: { $0.controlItem.state == .showItems }) {
-                    guard let screen = NSScreen.main else {
+                    guard let screen = NSScreen.screenWithActiveMenuBar ?? NSScreen.main else {
                         return
                     }
 
@@ -234,6 +234,11 @@ final class MenuBarManager: ObservableObject {
 
         let windows = WindowInfo.getOnScreenWindows(excludeDesktopWindows: false)
         let displayID = screen.displayID
+        guard ScreenCapture.claimLegacyCapture(
+            for: "average-color-\(displayID)"
+        ) else {
+            return
+        }
 
         if let window = WindowInfo.getMenuBarWindow(from: windows, for: displayID) {
             var bounds = window.frame
@@ -241,7 +246,24 @@ final class MenuBarManager: ObservableObject {
             bounds.origin.x = bounds.maxX - (bounds.width / 4)
             bounds.size.width /= 4
 
-            image = ScreenCapture.captureWindow(window.windowID, screenBounds: bounds, option: .nominalResolution)
+            if #available(macOS 26.0, *),
+               let wallpaperWindow = WindowInfo.getWallpaperWindow(
+                   from: windows,
+                   for: displayID
+               )
+            {
+                image = ScreenCapture.captureWindows(
+                    [window.windowID, wallpaperWindow.windowID],
+                    screenBounds: bounds,
+                    option: .nominalResolution
+                )
+            } else {
+                image = ScreenCapture.captureWindow(
+                    window.windowID,
+                    screenBounds: bounds,
+                    option: .nominalResolution
+                )
+            }
             source = .menuBarWindow
         } else if let window = WindowInfo.getWallpaperWindow(from: windows, for: displayID) {
             var bounds = window.frame

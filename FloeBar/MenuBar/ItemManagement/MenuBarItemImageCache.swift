@@ -8,8 +8,31 @@ import Combine
 
 /// Cache for menu bar item images.
 final class MenuBarItemImageCache: ObservableObject {
+    struct CachedImage: Equatable {
+        let cgImage: CGImage
+        let pixelScale: CGFloat
+
+        init?(cgImage: CGImage, pixelScale: CGFloat) {
+            guard pixelScale.isFinite, pixelScale > 0 else {
+                return nil
+            }
+            self.cgImage = cgImage
+            self.pixelScale = pixelScale
+        }
+
+        var nsImage: NSImage {
+            NSImage(
+                cgImage: cgImage,
+                size: CGSize(
+                    width: CGFloat(cgImage.width) / pixelScale,
+                    height: CGFloat(cgImage.height) / pixelScale
+                )
+            )
+        }
+    }
+
     /// The cached item images.
-    @Published private(set) var images = [CGWindowID: CGImage]()
+    @Published private(set) var images = [CGWindowID: CachedImage]()
 
     /// The screen of the cached item images.
     private(set) var screen: NSScreen?
@@ -101,85 +124,269 @@ final class MenuBarItemImageCache: ObservableObject {
 
     /// Captures the images of the current menu bar items and returns a dictionary containing
     /// the images, keyed by the current menu bar item window identifiers.
-    func createImages(for section: MenuBarSection.Name, screen: NSScreen) async -> [CGWindowID: CGImage] {
+    func createImages(
+        for section: MenuBarSection.Name,
+        screen: NSScreen
+    ) async -> [CGWindowID: CachedImage]? {
+        guard !Task.isCancelled else {
+            return nil
+        }
         guard let appState else {
             return [:]
         }
 
         let items = await appState.itemManager.itemCache[section]
+        guard !Task.isCancelled else {
+            return nil
+        }
 
-        var images = [CGWindowID: CGImage]()
-        let backingScaleFactor = screen.backingScaleFactor
+        var images = [CGWindowID: CachedImage]()
         let displayBounds = CGDisplayBounds(screen.displayID)
         let option: CGWindowImageOption = [.boundsIgnoreFraming, .bestResolution]
-        let defaultItemThickness = NSStatusBar.system.thickness * backingScaleFactor
 
         var itemFrames = [CGWindowID: CGRect]()
         var windowIDs = [CGWindowID]()
+        var captureWindows = [MenuBarCaptureService.Window]()
+        var expectedCaptureWindows = [
+            CGWindowID: MenuBarCaptureService.Window
+        ]()
         var frame = CGRect.null
 
-        for item in items {
-            let windowID = item.windowID
+        let requestedWindowIDs = items.map(\.windowID)
+        let freshWindowsByID = Dictionary(
+            WindowInfo.createWindows(from: requestedWindowIDs).map {
+                ($0.windowID, $0)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        for windowID in requestedWindowIDs {
+            guard !Task.isCancelled else {
+                return nil
+            }
             guard
-                // Use the most up-to-date window frame.
-                let itemFrame = Bridging.getWindowFrame(for: windowID),
-                itemFrame.minY == displayBounds.minY
+                let window = freshWindowsByID[windowID],
+                window.isMenuBarItem,
+                let captureWindow = MenuBarCaptureService.Window(
+                    windowID: window.windowID,
+                    ownerPID: window.ownerPID,
+                    title: window.title,
+                    layer: window.layer,
+                    bounds: window.frame
+                ),
+                window.frame.minY == displayBounds.minY
             else {
                 continue
             }
+            let itemFrame = window.frame
             itemFrames[windowID] = itemFrame
             windowIDs.append(windowID)
+            captureWindows.append(captureWindow)
+            expectedCaptureWindows[windowID] = captureWindow
             frame = frame.union(itemFrame)
         }
 
-        if
-            let compositeImage = ScreenCapture.captureWindows(windowIDs, option: option),
-            CGFloat(compositeImage.width) == frame.width * backingScaleFactor
-        {
-            for windowID in windowIDs {
-                guard let itemFrame = itemFrames[windowID] else {
-                    continue
-                }
+        guard !windowIDs.isEmpty else {
+            return [:]
+        }
 
-                let frame = CGRect(
-                    x: (itemFrame.origin.x - frame.origin.x) * backingScaleFactor,
-                    y: (itemFrame.origin.y - frame.origin.y) * backingScaleFactor,
-                    width: itemFrame.width * backingScaleFactor,
-                    height: itemFrame.height * backingScaleFactor
+        if #available(macOS 26.0, *), section != .visible {
+            guard ScreenCapture.claimLegacyCapture(
+                for: "item-cache-\(section.logString)"
+            ) else {
+                return nil
+            }
+            return await createImagesWithCaptureService(
+                windows: captureWindows,
+                expectedWindows: expectedCaptureWindows,
+                expectedScale: screen.backingScaleFactor,
+                option: option
+            )
+        }
+
+        var compositeImage: CGImage?
+        if section == .visible {
+            compositeImage = await ScreenCapture.captureWindowsOnScreen(
+                windowIDs,
+                option: option
+            )
+            guard !Task.isCancelled else {
+                return nil
+            }
+            if
+                compositeImage == nil,
+                ScreenCapture.claimLegacyCapture(
+                    for: "item-cache-\(section.logString)"
                 )
-
-                guard let itemImage = compositeImage.cropping(to: frame) else {
-                    continue
+            {
+                if #available(macOS 26.0, *) {
+                    let serviceImages = await createImagesWithCaptureService(
+                        windows: captureWindows,
+                        expectedWindows: expectedCaptureWindows,
+                        expectedScale: screen.backingScaleFactor,
+                        option: option
+                    )
+                    guard !Task.isCancelled else {
+                        return nil
+                    }
+                    if let serviceImages, !serviceImages.isEmpty {
+                        return serviceImages
+                    }
+                } else {
+                    compositeImage = ScreenCapture.captureWindows(
+                        windowIDs,
+                        option: option
+                    )
                 }
-
-                images[windowID] = itemImage
             }
         } else {
-            Logger.imageCache.warning("Composite image capture failed. Attempting to capturing items individually.")
+            guard !Task.isCancelled, ScreenCapture.claimLegacyCapture(
+                for: "item-cache-\(section.logString)"
+            ) else {
+                return nil
+            }
+            compositeImage = ScreenCapture.captureWindows(
+                windowIDs,
+                option: option
+            )
+        }
+        guard !Task.isCancelled else {
+            return nil
+        }
+        let effectiveScale = compositeImage.map {
+            frame.width > 0 ? CGFloat($0.width) / frame.width : 0
+        } ?? 0
 
+        if
+            let compositeImage,
+            effectiveScale.isFinite,
+            effectiveScale >= 0.5,
+            effectiveScale <= 4
+        {
             for windowID in windowIDs {
+                guard !Task.isCancelled else {
+                    return nil
+                }
                 guard let itemFrame = itemFrames[windowID] else {
                     continue
                 }
 
                 let frame = CGRect(
-                    x: 0,
-                    y: ((itemFrame.height * backingScaleFactor) / 2) - (defaultItemThickness / 2),
-                    width: itemFrame.width * backingScaleFactor,
-                    height: defaultItemThickness
+                    x: (itemFrame.origin.x - frame.origin.x) * effectiveScale,
+                    y: (itemFrame.origin.y - frame.origin.y) * effectiveScale,
+                    width: itemFrame.width * effectiveScale,
+                    height: itemFrame.height * effectiveScale
                 )
 
                 guard
-                    let itemImage = ScreenCapture.captureWindow(windowID, option: option),
-                    let croppedImage = itemImage.cropping(to: frame)
+                    let itemImage = compositeImage.cropping(to: frame),
+                    let cachedImage = CachedImage(
+                        cgImage: itemImage,
+                        pixelScale: effectiveScale
+                    )
                 else {
                     continue
                 }
 
-                images[windowID] = croppedImage
+                images[windowID] = cachedImage
+            }
+        } else {
+            Logger.imageCache.warning("Composite image capture failed. Attempting to capture items individually.")
+
+            for windowID in windowIDs {
+                guard !Task.isCancelled else {
+                    return nil
+                }
+                guard let itemFrame = itemFrames[windowID] else {
+                    continue
+                }
+
+                let itemImage: CGImage?
+                if section == .visible {
+                    itemImage = await ScreenCapture.captureWindowOnScreen(
+                        windowID,
+                        option: option
+                    )
+                } else if #unavailable(macOS 26.0) {
+                    itemImage = ScreenCapture.captureWindow(
+                        windowID,
+                        option: option
+                    )
+                } else {
+                    itemImage = nil
+                }
+                guard !Task.isCancelled else {
+                    return nil
+                }
+                guard let itemImage, itemFrame.width > 0 else {
+                    continue
+                }
+                let itemScale = CGFloat(itemImage.width) / itemFrame.width
+                let defaultItemThickness = NSStatusBar.system.thickness * itemScale
+                let frame = CGRect(
+                    x: 0,
+                    y: ((itemFrame.height * itemScale) / 2) - (defaultItemThickness / 2),
+                    width: itemFrame.width * itemScale,
+                    height: defaultItemThickness
+                )
+                guard
+                    let croppedImage = itemImage.cropping(to: frame),
+                    let cachedImage = CachedImage(
+                        cgImage: croppedImage,
+                        pixelScale: itemScale
+                    )
+                else {
+                    continue
+                }
+
+                images[windowID] = cachedImage
             }
         }
 
+        return images
+    }
+
+    private func createImagesWithCaptureService(
+        windows: [MenuBarCaptureService.Window],
+        expectedWindows: [CGWindowID: MenuBarCaptureService.Window],
+        expectedScale: CGFloat,
+        option: CGWindowImageOption
+    ) async -> [CGWindowID: CachedImage]? {
+        let frames = await MenuBarCaptureServiceConnection.shared.capture(
+            windows: windows,
+            expectedScale: expectedScale,
+            option: option
+        )
+        guard !Task.isCancelled else {
+            return nil
+        }
+        let liveWindowsByID = Dictionary(
+            WindowInfo.createWindows(from: frames.map(\.windowID)).map {
+                ($0.windowID, $0)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        var images = [CGWindowID: CachedImage]()
+        for frame in frames {
+            guard
+                let expectedWindow = expectedWindows[frame.windowID],
+                let liveWindow = liveWindowsByID[frame.windowID],
+                expectedWindow.matches(
+                    windowID: liveWindow.windowID,
+                    ownerPID: liveWindow.ownerPID,
+                    title: liveWindow.title,
+                    layer: liveWindow.layer,
+                    bounds: liveWindow.frame
+                ),
+                let image = MenuBarCaptureService.makeImage(from: frame),
+                let cachedImage = CachedImage(
+                    cgImage: image,
+                    pixelScale: CGFloat(frame.pixelScale)
+                )
+            else {
+                continue
+            }
+            images[frame.windowID] = cachedImage
+        }
         return images
     }
 
@@ -189,17 +396,24 @@ final class MenuBarItemImageCache: ObservableObject {
             updateGeneration += 1
             return updateGeneration
         }
-        guard
-            let appState,
-            let screen = NSScreen.main,
-            !Task.isCancelled
-        else {
+        guard let appState, !Task.isCancelled else {
             return
         }
 
         let currentItems = await appState.itemManager.itemCache.allItems
+        let onScreenAnchor = currentItems.first(where: \.isOnScreen)
+        let screen = onScreenAnchor.flatMap { item in
+            NSScreen.screens.first {
+                CGDisplayBounds($0.displayID).contains(
+                    CGPoint(x: item.frame.midX, y: item.frame.midY)
+                )
+            }
+        } ?? NSScreen.main
+        guard let screen else {
+            return
+        }
         let validWindowIDs = Set(currentItems.map(\.windowID))
-        var updatedImages = [CGWindowID: CGImage]()
+        var updatedImages = [CGWindowID: CachedImage]()
 
         for section in sections {
             guard !Task.isCancelled else {
@@ -208,7 +422,12 @@ final class MenuBarItemImageCache: ObservableObject {
             guard await !appState.itemManager.itemCache[section].isEmpty else {
                 continue
             }
-            let sectionImages = await createImages(for: section, screen: screen)
+            guard let sectionImages = await createImages(
+                for: section,
+                screen: screen
+            ) else {
+                continue
+            }
             guard !sectionImages.isEmpty else {
                 Logger.imageCache.warning("Update image cache failed for \(section.logString)")
                 continue
@@ -223,7 +442,7 @@ final class MenuBarItemImageCache: ObservableObject {
         let displayID = screen.displayID
         let menuBarHeight = screen.getMenuBarHeight()
         await MainActor.run {
-            guard updateGeneration == generation else {
+            guard !Task.isCancelled, updateGeneration == generation else {
                 return
             }
             self.images = self.images.filter { validWindowIDs.contains($0.key) }

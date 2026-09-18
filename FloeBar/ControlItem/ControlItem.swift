@@ -11,9 +11,49 @@ import Combine
 final class ControlItem {
     /// Possible identifiers for control items.
     enum Identifier: String, CaseIterable {
-        case iceIcon = "SItem"
-        case hidden = "HItem"
-        case alwaysHidden = "AHItem"
+        case iceIcon = "FloeBar.ControlItem.Visible"
+        case hidden = "FloeBar.ControlItem.Hidden"
+        case alwaysHidden = "FloeBar.ControlItem.AlwaysHidden"
+
+        private var legacyRawValue: String {
+            switch self {
+            case .iceIcon: "SItem"
+            case .hidden: "HItem"
+            case .alwaysHidden: "AHItem"
+            }
+        }
+
+        init?(recognizedTitle title: String) {
+            guard let identifier = Self(rawValue: title) else {
+                return nil
+            }
+            self = identifier
+        }
+
+        static func isRecognizedTitle(_ title: String) -> Bool {
+            Self(recognizedTitle: title) != nil
+        }
+
+        func migrateDefaultsIfNeeded() {
+            let oldName = legacyRawValue
+            guard oldName != rawValue else {
+                return
+            }
+            if
+                StatusItemDefaults[.preferredPosition, rawValue] == nil,
+                let oldValue: CGFloat = StatusItemDefaults[.preferredPosition, oldName]
+            {
+                StatusItemDefaults[.preferredPosition, rawValue] = oldValue
+                StatusItemDefaults[.preferredPosition, oldName] = nil
+            }
+            if
+                StatusItemDefaults[.visible, rawValue] == nil,
+                let oldValue: Bool = StatusItemDefaults[.visible, oldName]
+            {
+                StatusItemDefaults[.visible, rawValue] = oldValue
+                StatusItemDefaults[.visible, oldName] = nil
+            }
+        }
     }
 
     /// Possible hiding states for control items.
@@ -35,6 +75,9 @@ final class ControlItem {
 
     /// The frame of the control item's window (`@Published`).
     @Published private(set) var windowFrame: CGRect?
+
+    /// The current WindowServer-backed window for the status item.
+    @Published private var observedWindow: NSWindow?
 
     /// The shared app state.
     private weak var appState: AppState?
@@ -58,7 +101,7 @@ final class ControlItem {
 
     /// The control item's window.
     var window: NSWindow? {
-        statusItem.button?.window
+        observedWindow ?? statusItem.button?.window
     }
 
     /// The identifier of the control item's window.
@@ -89,6 +132,7 @@ final class ControlItem {
 
     /// Creates a control item with the given identifier and app state.
     init(identifier: Identifier, appState: AppState) {
+        identifier.migrateDefaultsIfNeeded()
         let autosaveName = identifier.rawValue
 
         // If the status item doesn't have a preferred position, set it
@@ -104,7 +148,9 @@ final class ControlItem {
             }
         }
 
-        self.statusItem = NSStatusBar.system.statusItem(withLength: 0)
+        // A zero-length item can remain backed by a synthetic AppKit window
+        // whose windowNumber is outside the UInt32 WindowServer range.
+        self.statusItem = NSStatusBar.system.statusItem(withLength: 1)
         self.statusItem.autosaveName = autosaveName
         self.identifier = identifier
         self.appState = appState
@@ -219,16 +265,40 @@ final class ControlItem {
             }
             .store(in: &c)
 
-        window?.publisher(for: \.frame)
-            .sink { [weak self] frame in
+        statusItem.publisher(for: \.button)
+            .map { button -> AnyPublisher<NSWindow?, Never> in
+                guard let button else {
+                    return Just(nil).eraseToAnyPublisher()
+                }
+                return button.publisher(for: \.window).eraseToAnyPublisher()
+            }
+            .switchToLatest()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] window in
+                self?.observedWindow = window
+            }
+            .store(in: &c)
+
+        $observedWindow
+            .map { window -> AnyPublisher<(window: NSWindow, frame: CGRect), Never> in
+                guard let window else {
+                    return Empty().eraseToAnyPublisher()
+                }
+                return window.publisher(for: \.frame)
+                    .map { frame in (window: window, frame: frame) }
+                    .eraseToAnyPublisher()
+            }
+            .switchToLatest()
+            .removeDuplicates { $0.window === $1.window && $0.frame == $1.frame }
+            .sink { [weak self] update in
                 guard
                     let self,
-                    let screen = window?.screen,
-                    screen.frame.intersects(frame)
+                    let screen = update.window.screen,
+                    screen.frame.intersects(update.frame)
                 else {
                     return
                 }
-                windowFrame = frame
+                windowFrame = update.frame
             }
             .store(in: &c)
 
@@ -331,6 +401,7 @@ final class ControlItem {
         guard let button = statusItem.button else {
             return
         }
+        observedWindow = button.window
         button.target = self
         button.action = #selector(performAction)
     }

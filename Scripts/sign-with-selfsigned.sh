@@ -26,6 +26,24 @@ if ! security find-certificate -c "$IDENTITY" >/dev/null 2>&1; then
 fi
 
 # Sign inside-out: nested Sparkle components first, then the app.
+MENU_BAR_SERVICE="$APP/Contents/XPCServices/MenuBarItemService.xpc"
+MENU_BAR_SERVICE_ID="$(plutil -extract CFBundleIdentifier raw -o - \
+    "$MENU_BAR_SERVICE/Contents/Info.plist" 2>/dev/null || true)"
+if [[ "$MENU_BAR_SERVICE_ID" != "com.evanzhu.FloeBar.MenuBarItemService" ]]; then
+    printf 'ERROR: missing or incorrectly identified MenuBarItemService.xpc: %s\n' \
+        "$MENU_BAR_SERVICE_ID" >&2
+    exit 1
+fi
+codesign --force --sign "$IDENTITY" --timestamp=none "$MENU_BAR_SERVICE"
+CAPTURE_SERVICE="$APP/Contents/XPCServices/MenuBarCaptureService.xpc"
+CAPTURE_SERVICE_ID="$(plutil -extract CFBundleIdentifier raw -o - \
+    "$CAPTURE_SERVICE/Contents/Info.plist" 2>/dev/null || true)"
+if [[ "$CAPTURE_SERVICE_ID" != "com.evanzhu.FloeBar.MenuBarCaptureService" ]]; then
+    printf 'ERROR: missing or incorrectly identified MenuBarCaptureService.xpc: %s\n' \
+        "$CAPTURE_SERVICE_ID" >&2
+    exit 1
+fi
+codesign --force --sign "$IDENTITY" --timestamp=none "$CAPTURE_SERVICE"
 SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
 if [[ -d "$SPARKLE" ]]; then
     for COMPONENT in \

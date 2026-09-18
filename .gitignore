@@ -5,10 +5,6 @@ xcuserdata/
 # Build/CI artifacts and local outputs are not part of the source.
 *.xcuserstate
 
-# Tests and test tooling are kept out of the public source tree.
-/Tests/
-Scripts/test-*.sh
-
 # Upstream demo media / design source (large binaries, not needed to build).
 # Anchored to the repo root so it never matches FloeBar/Resources/ (app assets).
 /Resources/

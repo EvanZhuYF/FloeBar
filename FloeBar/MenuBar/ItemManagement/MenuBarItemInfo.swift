@@ -17,6 +17,25 @@ struct MenuBarItemInfo: Hashable, CustomStringConvertible {
         namespace == .special
     }
 
+    /// Whether the item is an unnamed slot hosted by Control Center.
+    var isGenericControlCenterItem: Bool {
+        guard namespace == .controlCenter, title.hasPrefix("Item-") else {
+            return false
+        }
+        let suffix = title.dropFirst("Item-".count)
+        return !suffix.isEmpty && suffix.allSatisfy(\.isNumber)
+    }
+
+    /// Whether the item is one of Control Center's fixed trailing modules.
+    var isBentoBox: Bool {
+        namespace == .controlCenter && title.hasPrefix("BentoBox")
+    }
+
+    /// Whether a known Control Center module was attributed to another app.
+    var isMisattributedControlCenterModule: Bool {
+        namespace != .controlCenter && Self.isControlCenterModuleTitle(title)
+    }
+
     var description: String {
         namespace.rawValue + ":" + title
     }
@@ -30,11 +49,42 @@ struct MenuBarItemInfo: Hashable, CustomStringConvertible {
 
 // MARK: MenuBarItemInfo Constants
 extension MenuBarItemInfo {
+    private static let controlCenterModuleTitles: Set<String> = [
+        "Accessibility",
+        "AccessibilityShortcuts",
+        "AudioVideoModule",
+        "Battery",
+        "Bluetooth",
+        "Clock",
+        "Display",
+        "FaceTime",
+        "FocusModes",
+        "Hearing",
+        "KeyboardBrightness",
+        "MusicRecognition",
+        "NowPlaying",
+        "ScreenMirroring",
+        "Sound",
+        "StageManager",
+        "UserSwitcher",
+        "WiFi",
+    ]
+
+    static func isControlCenterModuleTitle(_ title: String) -> Bool {
+        controlCenterModuleTitles.contains(title) || title.hasPrefix("BentoBox")
+    }
+
     /// An array of items whose movement is prevented by macOS.
-    static let immovableItems = [clock, siri, controlCenter]
+    static let immovableItems = [clock, controlCenter, ssMenuAgent]
 
     /// An array of items that can be moved, but cannot be hidden.
-    static let nonHideableItems = [audioVideoModule, faceTime, musicRecognition]
+    static let nonHideableItems = [
+        audioVideoModule,
+        faceTime,
+        musicRecognition,
+        screenCaptureUI,
+        gameMode,
+    ]
 
     /// Information for an item that represents the Ice icon, a.k.a. the
     /// control item for the visible section.
@@ -72,7 +122,7 @@ extension MenuBarItemInfo {
     /// Information for the "BentoBox" (a.k.a. "Control Center") item.
     static let controlCenter = MenuBarItemInfo(
         namespace: .controlCenter,
-        title: "BentoBox"
+        title: "BentoBox-0"
     )
 
     /// Information for the item that appears in the menu bar while the
@@ -92,6 +142,24 @@ extension MenuBarItemInfo {
     static let musicRecognition = MenuBarItemInfo(
         namespace: .controlCenter,
         title: "MusicRecognition"
+    )
+
+    /// Information for the system screen recording indicator.
+    static let screenCaptureUI = MenuBarItemInfo(
+        namespace: .screenCaptureUI,
+        title: "Item-0"
+    )
+
+    /// Information for the Screen Sharing menu extra.
+    static let ssMenuAgent = MenuBarItemInfo(
+        namespace: .ssMenuAgent,
+        title: "Item-0"
+    )
+
+    /// Information for the Game Mode menu extra.
+    static let gameMode = MenuBarItemInfo(
+        namespace: .gamePolicyAgent,
+        title: "Item-0"
     )
 
     /// Information for a special item that indicates the location where
@@ -211,6 +279,15 @@ extension MenuBarItemInfo.Namespace {
 
     /// The namespace for menu bar items owned by the System UI Server.
     static let systemUIServer = Self("com.apple.systemuiserver")
+
+    /// The namespace for the screen recording indicator.
+    static let screenCaptureUI = Self("com.apple.screencaptureui")
+
+    /// The namespace for the Screen Sharing menu extra.
+    static let ssMenuAgent = Self("com.apple.SSMenuAgent")
+
+    /// The namespace for the Game Mode menu extra.
+    static let gamePolicyAgent = Self("GamePolicyAgent")
 
     /// The namespace for special items.
     static let special = Self("Special")

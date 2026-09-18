@@ -13,6 +13,18 @@ final class IceBarColorManager: ObservableObject {
 
     private var windowImage: CGImage?
 
+    private struct DisplaySample {
+        let image: CGImage
+        let screenFrame: CGRect
+        let spaceID: CGSSpaceID
+        var lastUsed: ContinuousClock.Instant
+    }
+
+    private var displaySamples = [CGDirectDisplayID: DisplaySample]()
+    private var windowImageDisplayID: CGDirectDisplayID?
+    private var windowImageSpaceID: CGSSpaceID?
+    private static let maximumDisplaySamples = 4
+
     private var cancellables = Set<AnyCancellable>()
 
     init(iceBarPanel: IceBarPanel) {
@@ -30,12 +42,11 @@ final class IceBarColorManager: ObservableObject {
                     guard
                         let self,
                         let screen,
-                        iceBarPanel.isVisible,
-                        screen == .main
+                        iceBarPanel.isVisible
                     else {
                         return
                     }
-                    updateWindowImage(for: screen)
+                    updateAllProperties(with: iceBarPanel.frame, screen: screen)
                 }
                 .store(in: &c)
 
@@ -50,16 +61,17 @@ final class IceBarColorManager: ObservableObject {
                 }
                 guard isVisible else {
                     windowImage = nil
+                    windowImageDisplayID = nil
+                    windowImageSpaceID = nil
                     colorInfo = nil
                     return
                 }
                 guard
-                    let screen = iceBarPanel.screen,
-                    screen == .main
+                    let screen = iceBarPanel.screen
                 else {
                     return
                 }
-                if windowImage == nil {
+                if windowImage == nil || windowImageDisplayID != screen.displayID {
                     updateWindowImage(for: screen)
                 }
                 updateColorInfo(with: frame, screen: screen)
@@ -97,8 +109,7 @@ final class IceBarColorManager: ObservableObject {
                     let self,
                     let iceBarPanel,
                     let screen = iceBarPanel.screen,
-                    iceBarPanel.isVisible,
-                    screen == .main
+                    iceBarPanel.isVisible
                 else {
                     return
                 }
@@ -113,18 +124,88 @@ final class IceBarColorManager: ObservableObject {
 
     private func updateWindowImage(for screen: NSScreen) {
         let displayID = screen.displayID
+        let connectedDisplays = Set(NSScreen.screens.map(\.displayID))
+        displaySamples = displaySamples.filter { connectedDisplays.contains($0.key) }
+        windowImage = nil
+        windowImageDisplayID = displayID
+        windowImageSpaceID = nil
+        guard let spaceID = Bridging.currentSpaceID(for: displayID) else {
+            displaySamples.removeValue(forKey: displayID)
+            return
+        }
+        windowImageSpaceID = spaceID
         if
-            let window = WindowInfo.getMenuBarWindow(for: displayID),
-            let image = ScreenCapture.captureWindow(window.windowID, option: .nominalResolution)
+            var sample = displaySamples[displayID],
+            sample.screenFrame == screen.frame,
+            sample.spaceID == spaceID
         {
+            sample.lastUsed = .now
+            displaySamples[displayID] = sample
+            windowImage = sample.image
+        }
+        guard ScreenCapture.claimLegacyCapture(
+            for: "ice-bar-color-\(displayID)"
+        ) else {
+            return
+        }
+        // Once a refresh is allowed, the old sample must not mask a failure.
+        displaySamples.removeValue(forKey: displayID)
+        windowImage = nil
+        let windows = WindowInfo.getOnScreenWindows(excludeDesktopWindows: false)
+        guard let menuBarWindow = WindowInfo.getMenuBarWindow(
+            from: windows,
+            for: displayID
+        ) else {
+            windowImage = nil
+            return
+        }
+
+        let image: CGImage?
+        if #available(macOS 26.0, *),
+           let wallpaperWindow = WindowInfo.getWallpaperWindow(
+               from: windows,
+               for: displayID
+           )
+        {
+            image = ScreenCapture.captureWindows(
+                [menuBarWindow.windowID, wallpaperWindow.windowID],
+                screenBounds: menuBarWindow.frame,
+                option: .nominalResolution
+            )
+        } else {
+            image = ScreenCapture.captureWindow(
+                menuBarWindow.windowID,
+                option: .nominalResolution
+            )
+        }
+        if let image {
             windowImage = image
+            displaySamples[displayID] = DisplaySample(
+                image: image,
+                screenFrame: screen.frame,
+                spaceID: spaceID,
+                lastUsed: .now
+            )
+            while displaySamples.count > Self.maximumDisplaySamples {
+                guard let oldest = displaySamples.min(by: {
+                    $0.value.lastUsed < $1.value.lastUsed
+                })?.key else {
+                    break
+                }
+                displaySamples.removeValue(forKey: oldest)
+            }
         } else {
             windowImage = nil
         }
     }
 
     private func updateColorInfo(with frame: CGRect, screen: NSScreen) {
-        guard let windowImage else {
+        guard
+            let windowImage,
+            windowImageDisplayID == screen.displayID,
+            let windowImageSpaceID,
+            Bridging.currentSpaceID(for: screen.displayID) == windowImageSpaceID
+        else {
             colorInfo = nil
             return
         }

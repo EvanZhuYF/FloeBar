@@ -7,7 +7,7 @@
 # everything to the matching GitHub release tag.
 #
 # Usage:
-#   MARKETING_VERSION=1.0.4 CURRENT_PROJECT_VERSION=1223 bash Scripts/release.sh
+#   MARKETING_VERSION=1.0.5 CURRENT_PROJECT_VERSION=1226 bash Scripts/release.sh
 #
 # Env:
 #   MARKETING_VERSION        Required. Marketing version, e.g. 1.0.3.
@@ -34,6 +34,18 @@ SIGN_ID="${FLOEBAR_SIGN_ID:-FloeBar Self-Signed}"
 
 mkdir -p "$DEST"
 
+# Keep the release path aligned with local verification.
+bash "$ROOT/Scripts/test-section-persistence.sh"
+bash "$ROOT/Scripts/test-menu-bar-item-service.sh"
+bash "$ROOT/Scripts/test-menu-bar-capture-service.sh"
+bash "$ROOT/Scripts/test-menu-bar-capture-policy.sh"
+bash "$ROOT/Scripts/test-menu-bar-source-pid-resolver.sh"
+bash "$ROOT/Scripts/test-screen-capture-coordinator.sh"
+bash "$ROOT/Scripts/test-item-identity.sh"
+bash "$ROOT/Scripts/test-window-descriptions.sh"
+bash "$ROOT/Scripts/test-localizations.sh"
+bash "$ROOT/Scripts/test-idle-refresh.sh"
+
 # --- Build (universal, Release). Note: unlike build-local.sh we do NOT set
 # IceLocalBuild, because a published build must be allowed to self-update. ---
 xcodebuild -quiet \
@@ -44,7 +56,7 @@ xcodebuild -quiet \
     -jobs 4 \
     ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
     CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM= ENABLE_HARDENED_RUNTIME=NO \
-    PRODUCT_BUNDLE_IDENTIFIER="$RELEASE_BUNDLE_ID" \
+    FLOEBAR_APP_BUNDLE_IDENTIFIER="$RELEASE_BUNDLE_ID" \
     MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
     build
 
@@ -53,9 +65,9 @@ rm -rf "$APP"
 ditto "$DERIVED/Build/Products/Release/FloeBar.app" "$APP"
 plutil -replace CFBundleIdentifier -string "$RELEASE_BUNDLE_ID" "$APP/Contents/Info.plist"
 
-# Remove debug-map entries containing local source/object paths before signing.
-# Keep the separate dSYM in DerivedData for local crash symbolication.
-xcrun strip -S "$APP/Contents/MacOS/FloeBar"
+# Remove debug-map entries containing local source/object paths from every
+# first-party executable. Keep separate dSYMs in DerivedData for symbolication.
+bash "$ROOT/Scripts/strip-local-debug-symbols.sh" "$APP"
 
 # Guard: a published build must carry a real SUPublicEDKey, or Sparkle can never
 # verify the very updates this pipeline signs.
@@ -67,6 +79,24 @@ fi
 
 sign_bundle() {
     local target="$1"
+    local menu_bar_service="$target/Contents/XPCServices/MenuBarItemService.xpc"
+    local capture_service="$target/Contents/XPCServices/MenuBarCaptureService.xpc"
+    local menu_bar_service_id
+    menu_bar_service_id="$(plutil -extract CFBundleIdentifier raw -o - \
+        "$menu_bar_service/Contents/Info.plist" 2>/dev/null || true)"
+    if [[ "$menu_bar_service_id" != "com.evanzhu.FloeBar.MenuBarItemService" ]]; then
+        printf 'error: missing or incorrectly identified MenuBarItemService.xpc: %s\n' "$menu_bar_service_id" >&2
+        exit 1
+    fi
+    local capture_service_id
+    capture_service_id="$(plutil -extract CFBundleIdentifier raw -o - \
+        "$capture_service/Contents/Info.plist" 2>/dev/null || true)"
+    if [[ "$capture_service_id" != "com.evanzhu.FloeBar.MenuBarCaptureService" ]]; then
+        printf 'error: missing or incorrectly identified MenuBarCaptureService.xpc: %s\n' "$capture_service_id" >&2
+        exit 1
+    fi
+    codesign --force --sign "$SIGN_ID" --timestamp=none "$menu_bar_service"
+    codesign --force --sign "$SIGN_ID" --timestamp=none "$capture_service"
     local sparkle="$target/Contents/Frameworks/Sparkle.framework"
     if [[ -d "$sparkle" ]]; then
         for component in \
@@ -110,7 +140,14 @@ thin_bundle_to_arm64() {
 }
 
 sign_bundle "$APP"
+bash "$ROOT/Scripts/test-production-xpc.sh" "$APP"
+bash "$ROOT/Scripts/test-xpc-connection.sh" "$APP"
+bash "$ROOT/Scripts/test-menu-bar-capture-xpc.sh" "$APP"
 lipo "$APP/Contents/MacOS/FloeBar" -verify_arch arm64 x86_64
+lipo "$APP/Contents/XPCServices/MenuBarItemService.xpc/Contents/MacOS/MenuBarItemService" \
+    -verify_arch arm64 x86_64
+lipo "$APP/Contents/XPCServices/MenuBarCaptureService.xpc/Contents/MacOS/MenuBarCaptureService" \
+    -verify_arch arm64 x86_64
 
 # --- Universal zip ---
 UNIVERSAL_ZIP="$DEST/FloeBar-$VERSION-universal.zip"

@@ -449,17 +449,7 @@ private struct IceBarItemView: View {
     }
 
     private var image: NSImage? {
-        guard
-            let image = imageCache.images[item.windowID],
-            let screen = imageCache.screen
-        else {
-            return nil
-        }
-        let size = CGSize(
-            width: CGFloat(image.width) / screen.backingScaleFactor,
-            height: CGFloat(image.height) / screen.backingScaleFactor
-        )
-        return NSImage(cgImage: image, size: size)
+        imageCache.images[item.windowID]?.nsImage
     }
 
     var body: some View {

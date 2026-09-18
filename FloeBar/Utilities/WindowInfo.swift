@@ -107,19 +107,22 @@ struct WindowInfo {
 
     /// Creates a window with the given window identifier.
     init?(windowID: CGWindowID) {
-        var pointer = UnsafeRawPointer(bitPattern: Int(windowID))
-        guard
-            let array = CFArrayCreate(kCFAllocatorDefault, &pointer, 1, nil),
-            let list = CGWindowListCreateDescriptionFromArray(array) as? [CFDictionary],
-            let dictionary = list.first
-        else {
+        guard let window = Self.createWindows(from: [windowID]).first else {
             return nil
         }
-        self.init(dictionary: dictionary)
+        self = window
     }
 }
 
 // MARK: - WindowList Operations
+
+extension WindowInfo {
+    /// Creates window descriptions in one WindowServer request.
+    static func createWindows(from windowIDs: [CGWindowID]) -> [WindowInfo] {
+        let list = WindowDescriptionQuery.descriptions(for: windowIDs)
+        return list.compactMap(WindowInfo.init(dictionary:))
+    }
+}
 
 // MARK: Private
 extension WindowInfo {

@@ -24,6 +24,14 @@ trap cleanup EXIT
 COPY="$TEMP_DIR/FloeBar.app"
 ditto "$APP" "$COPY"
 plutil -replace CFBundleIdentifier -string "local.floebar.smoke.$(uuidgen)" "$COPY/Contents/Info.plist"
+MENU_BAR_SERVICE="$COPY/Contents/XPCServices/MenuBarItemService.xpc"
+if [[ -d "$MENU_BAR_SERVICE" ]]; then
+    codesign --force --sign - --timestamp=none "$MENU_BAR_SERVICE"
+fi
+CAPTURE_SERVICE="$COPY/Contents/XPCServices/MenuBarCaptureService.xpc"
+if [[ -d "$CAPTURE_SERVICE" ]]; then
+    codesign --force --sign - --timestamp=none "$CAPTURE_SERVICE"
+fi
 codesign --force --sign - --timestamp=none "$COPY"
 "$COPY/Contents/MacOS/FloeBar" \
     -AppleLanguages "($LANGUAGE)" \

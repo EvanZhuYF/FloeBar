@@ -65,9 +65,9 @@ final class MenuBarSection {
             return nil
         }
         if appState.isActiveSpaceFullscreen {
-            return NSScreen.screenWithMouse ?? NSScreen.main
+            return NSScreen.screenWithMouse ?? NSScreen.screenWithActiveMenuBar ?? NSScreen.main
         } else {
-            return NSScreen.main
+            return NSScreen.screenWithActiveMenuBar ?? NSScreen.main
         }
     }
 
@@ -254,11 +254,15 @@ final class MenuBarSection {
         rehideMonitor = UniversalEventMonitor(mask: .mouseMoved) { [weak self] event in
             guard
                 let self,
-                let screen = NSScreen.main
+                let screen = NSScreen.screenWithActiveMenuBar ?? NSScreen.main
             else {
                 return event
             }
-            if NSEvent.mouseLocation.y < screen.visibleFrame.maxY {
+            if !NSScreen.isPointInMenuBar(
+                NSEvent.mouseLocation,
+                screenFrame: screen.frame,
+                visibleFrame: screen.visibleFrame
+            ) {
                 if rehideTimer == nil {
                     rehideTimer = .scheduledTimer(
                         withTimeInterval: appState.settingsManager.generalSettingsManager.rehideInterval,
@@ -266,11 +270,15 @@ final class MenuBarSection {
                     ) { [weak self] _ in
                         guard
                             let self,
-                            let screen = NSScreen.main
+                            let screen = NSScreen.screenWithActiveMenuBar ?? NSScreen.main
                         else {
                             return
                         }
-                        if NSEvent.mouseLocation.y < screen.visibleFrame.maxY {
+                        if !NSScreen.isPointInMenuBar(
+                            NSEvent.mouseLocation,
+                            screenFrame: screen.frame,
+                            visibleFrame: screen.visibleFrame
+                        ) {
                             Task {
                                 await self.hide()
                             }

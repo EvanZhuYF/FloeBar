@@ -34,15 +34,8 @@ final class LayoutBarItemView: NSView {
     /// The image displayed inside the view.
     private var image: NSImage? {
         didSet {
-            if
-                let image,
-                let screen = appState?.imageCache.screen
-            {
-                let size = CGSize(
-                    width: image.size.width / screen.backingScaleFactor,
-                    height: image.size.height / screen.backingScaleFactor
-                )
-                setFrameSize(size)
+            if let image {
+                setFrameSize(image.size)
             } else {
                 setFrameSize(.zero)
             }
@@ -94,11 +87,11 @@ final class LayoutBarItemView: NSView {
                 .sink { [weak self] images in
                     guard
                         let self,
-                    let cgImage = images[item.windowID]
+                        let cachedImage = images[item.windowID]
                     else {
                         return
                     }
-                    image = NSImage(cgImage: cgImage, size: CGSize(width: cgImage.width, height: cgImage.height))
+                    image = cachedImage.nsImage
                 }
                 .store(in: &c)
         }

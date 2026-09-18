@@ -47,6 +47,50 @@ extension Bridging {
     }
 }
 
+// MARK: - CGSDisplay
+
+extension Bridging {
+    /// Returns the display currently hosting the active menu bar.
+    static var activeMenuBarDisplayID: CGDirectDisplayID? {
+        guard
+            let identifier = CGSCopyActiveMenuBarDisplayIdentifier(
+                CGSMainConnectionID()
+            )?.takeRetainedValue(),
+            let uuid = CFUUIDCreateFromString(nil, identifier)
+        else {
+            return nil
+        }
+
+        var count: UInt32 = 0
+        guard CGGetActiveDisplayList(0, nil, &count) == .success else {
+            return nil
+        }
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        guard CGGetActiveDisplayList(count, &displays, nil) == .success else {
+            return nil
+        }
+        return displays.first {
+            CGDisplayCreateUUIDFromDisplayID($0)?.takeRetainedValue() == uuid
+        }
+    }
+
+    /// Returns the current Space for a specific display.
+    static func currentSpaceID(for displayID: CGDirectDisplayID) -> CGSSpaceID? {
+        guard
+            let uuid = CGDisplayCreateUUIDFromDisplayID(
+                displayID
+            )?.takeRetainedValue(),
+            let identifier = CFUUIDCreateString(nil, uuid)
+        else {
+            return nil
+        }
+        return CGSManagedDisplayGetCurrentSpace(
+            CGSMainConnectionID(),
+            identifier
+        )
+    }
+}
+
 // MARK: - CGSWindow
 
 extension Bridging {
@@ -235,6 +279,17 @@ extension Bridging {
     /// - Parameter windowID: An identifier for a window.
     static func isWindowOnActiveSpace(_ windowID: CGWindowID) -> Bool {
         getSpaceList(for: windowID, option: .allSpaces).contains(activeSpaceID)
+    }
+
+    /// Returns whether a window belongs to the current Space of a display.
+    static func isWindow(
+        _ windowID: CGWindowID,
+        onCurrentSpaceOf displayID: CGDirectDisplayID
+    ) -> Bool {
+        guard let spaceID = currentSpaceID(for: displayID) else {
+            return isWindowOnActiveSpace(windowID)
+        }
+        return getSpaceList(for: windowID, option: .allSpaces).contains(spaceID)
     }
 
     /// Returns a Boolean value that indicates whether the space with the given

@@ -14,6 +14,42 @@ final class MenuBarItemSectionStore {
     struct Identity: Codable, Hashable {
         let bundleIdentifier: String
         let title: String
+        let instanceIndex: Int
+
+        init(
+            bundleIdentifier: String,
+            title: String,
+            instanceIndex: Int = 0
+        ) {
+            self.bundleIdentifier = bundleIdentifier
+            self.title = title
+            self.instanceIndex = instanceIndex
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case bundleIdentifier, title, instanceIndex
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            bundleIdentifier = try container.decode(String.self, forKey: .bundleIdentifier)
+            title = try container.decode(String.self, forKey: .title)
+            instanceIndex = try container.decodeIfPresent(
+                Int.self,
+                forKey: .instanceIndex
+            ) ?? 0
+        }
+    }
+
+    /// An ordinal is not evidence that two same-title windows survive a relaunch.
+    private struct Group: Codable, Hashable {
+        let bundleIdentifier: String
+        let title: String
+
+        init(_ identity: Identity) {
+            bundleIdentifier = identity.bundleIdentifier
+            title = identity.title
+        }
     }
 
     struct Item: Equatable {
@@ -41,6 +77,7 @@ final class MenuBarItemSectionStore {
     private struct Document: Codable {
         let version: Int
         let records: [Record]
+        var ambiguousGroups: Set<Group>?
     }
 
     private struct Attempts {
@@ -60,6 +97,7 @@ final class MenuBarItemSectionStore {
 
     private let defaults: UserDefaults
     private var sections: [Identity: Section] = [:]
+    private var ambiguousGroups: Set<Group> = []
     private var attempts: [Identity: Attempts] = [:]
     private var snapshot: [Item]?
     private var snapshotDate: TimeInterval = 0
@@ -80,13 +118,19 @@ final class MenuBarItemSectionStore {
                 }
                 sections[record.identity] = record.section
             }
+            ambiguousGroups = document.ambiguousGroups ?? []
+            // Older documents could store duplicate ordinals as independent intent.
+            try noteIdentities(Array(sections.keys))
         } else if defaults.object(forKey: Self.defaultsKey) != nil {
             throw StoreError.invalidRecords
         }
     }
 
     func section(for identity: Identity) -> Section? {
-        sections[identity]
+        guard !ambiguousGroups.contains(Group(identity)) else {
+            return nil
+        }
+        return sections[identity]
     }
 
     var savedItemCount: Int {
@@ -95,7 +139,11 @@ final class MenuBarItemSectionStore {
 
     /// Called only for an explicit user move, or before a temporary move.
     func remember(_ identity: Identity, in section: Section) throws {
+        try noteIdentities([identity])
         guard !identity.bundleIdentifier.isEmpty else {
+            return
+        }
+        guard !ambiguousGroups.contains(Group(identity)) else {
             return
         }
         var updated = sections
@@ -109,6 +157,17 @@ final class MenuBarItemSectionStore {
         snapshot = nil
     }
 
+    /// Record ambiguity before settling or excluding temporarily shown windows.
+    /// Keep tombstones across launches so a later singleton cannot steal index zero.
+    func noteIdentities(_ identities: [Identity]) throws {
+        let groups = Dictionary(grouping: identities.filter { !$0.bundleIdentifier.isEmpty }, by: Group.init)
+        let discovered = groups.compactMap { group, identities in
+            identities.count > 1 || identities.contains(where: { $0.instanceIndex > 0 }) ? group : nil
+        }
+        let updated = ambiguousGroups.union(discovered)
+        try persist(sections, ambiguousGroups: updated)
+    }
+
     /// A stable observation may learn new items, but must never overwrite known intent.
     /// A returned restore reserves one of three attempts for this window's lifetime.
     func observe(
@@ -120,6 +179,7 @@ final class MenuBarItemSectionStore {
         alwaysHiddenEnabled: Bool = true,
         allowRestore: Bool = true
     ) throws -> Observation {
+        try noteIdentities(items.map(\.identity))
         let current = items.sorted { $0.windowID < $1.windowID }
         guard snapshot == current else {
             snapshot = current
@@ -131,12 +191,11 @@ final class MenuBarItemSectionStore {
         }
 
         // Never guess which of two identically named icons owns a saved setting.
-        let groups = Dictionary(grouping: current, by: \.identity)
-        let currentIdentities = Set(groups.keys)
+        let currentIdentities = Set(current.map(\.identity))
         attempts = attempts.filter { currentIdentities.contains($0.key) }
         let eligible = current.filter {
             !$0.identity.bundleIdentifier.isEmpty &&
-            groups[$0.identity]?.count == 1 &&
+            !ambiguousGroups.contains(Group($0.identity)) &&
             !excludedWindowIDs.contains($0.windowID)
         }
         var updated = sections
@@ -180,20 +239,28 @@ final class MenuBarItemSectionStore {
         return Observation(isSettled: true, restore: nil)
     }
 
-    private func persist(_ updated: [Identity: Section]) throws {
-        guard updated != sections else {
+    private func persist(
+        _ updated: [Identity: Section],
+        ambiguousGroups updatedGroups: Set<Group>? = nil
+    ) throws {
+        let updatedGroups = updatedGroups ?? ambiguousGroups
+        guard updated != sections || updatedGroups != ambiguousGroups else {
             return
         }
         let records = updated.map { Record(identity: $0.key, section: $0.value) }.sorted {
             if $0.identity.bundleIdentifier != $1.identity.bundleIdentifier {
                 return $0.identity.bundleIdentifier < $1.identity.bundleIdentifier
             }
-            return $0.identity.title < $1.identity.title
+            if $0.identity.title != $1.identity.title {
+                return $0.identity.title < $1.identity.title
+            }
+            return $0.identity.instanceIndex < $1.identity.instanceIndex
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(Document(version: 1, records: records))
+        let data = try encoder.encode(Document(version: 1, records: records, ambiguousGroups: updatedGroups))
         defaults.set(data, forKey: Self.defaultsKey)
         sections = updated
+        ambiguousGroups = updatedGroups
     }
 }

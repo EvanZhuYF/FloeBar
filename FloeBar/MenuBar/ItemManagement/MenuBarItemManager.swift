@@ -41,9 +41,9 @@ final class MenuBarItemManager: ObservableObject {
                     return false
                 }
 
-                if item.owningApplication == .current {
+                if item.info.namespace == .ice {
                     // Ice icon is the only item owned by Ice that should be included.
-                    guard item.title == ControlItem.Identifier.iceIcon.rawValue else {
+                    guard item.info == .iceIcon else {
                         return false
                     }
                 }
@@ -54,7 +54,12 @@ final class MenuBarItemManager: ObservableObject {
 
         /// Returns the name of the section for the given menu bar item.
         func section(for item: MenuBarItem) -> MenuBarSection.Name? {
-            for (section, items) in self.items where items.contains(where: { $0.info == item.info }) {
+            guard let match = MenuBarItem.matching(item, in: allItems) else {
+                return nil
+            }
+            for (section, items) in self.items where items.contains(where: {
+                $0.windowID == match.windowID
+            }) {
                 return section
             }
             return nil
@@ -69,8 +74,17 @@ final class MenuBarItemManager: ObservableObject {
 
     /// Context for a temporarily shown menu bar item.
     private struct TempShownItemContext {
-        /// The information associated with the item.
-        let info: MenuBarItemInfo
+        /// The exact item shown; a sibling must not inherit its return context.
+        let item: MenuBarItem
+
+        /// Processes that may own the interface opened by this item.
+        var interfacePIDs: Set<pid_t>
+
+        /// Interface windows that were already visible before this item opened.
+        let preexistingInterfaceWindowIDs: Set<CGWindowID>
+
+        /// Display containing the item while it is temporarily shown.
+        let displayID: CGDirectDisplayID
 
         /// The destination to return the item to.
         let returnDestination: MoveDestination
@@ -82,23 +96,29 @@ final class MenuBarItemManager: ObservableObject {
 
         /// A Boolean value that indicates whether the menu bar item's interface is showing.
         var isShowingInterface: Bool {
-            guard let currentWindow = shownInterfaceWindow.flatMap({ WindowInfo(windowID: $0.windowID) }) else {
-                return false
-            }
-            return if
-                currentWindow.layer != CGWindowLevelForKey(.popUpMenuWindow),
-                let owningApplication = currentWindow.owningApplication
+            if
+                let currentWindow = shownInterfaceWindow.flatMap({
+                    WindowInfo(windowID: $0.windowID)
+                }),
+                MenuBarItem.isInterfaceWindow(currentWindow, ownedBy: interfacePIDs)
             {
-                owningApplication.isActive && currentWindow.isOnScreen
-            } else {
-                currentWindow.isOnScreen
+                return true
             }
+            return MenuBarItem.firstInterfaceWindow(
+                in: WindowInfo.getOnScreenWindows(),
+                ownedBy: interfacePIDs,
+                excluding: preexistingInterfaceWindowIDs
+            ) != nil
+        }
+
+        func matches(_ item: MenuBarItem) -> Bool {
+            self.item.isSameWindow(as: item)
         }
     }
 
     private struct WindowSignature: Equatable {
         let windowID: CGWindowID
-        let frame: CGRect?
+        let frame: CGRect
     }
 
     private struct SectionPlacement: Hashable {
@@ -109,12 +129,16 @@ final class MenuBarItemManager: ObservableObject {
 
     private struct NativeDrag {
         let item: MenuBarItem
+        let initialSection: MenuBarItemSectionStore.Section?
+        let wasAwaitingStableIdentity: Bool
         let initialPlacements: Set<SectionPlacement>
         var didDrag: Bool
     }
 
     /// The manager's menu bar item cache.
     @Published private(set) var itemCache = ItemCache()
+
+    private var persistenceIdentityPolicy = MenuBarItemPersistenceIdentityPolicy()
 
     /// The shared app state.
     private(set) weak var appState: AppState?
@@ -133,7 +157,11 @@ final class MenuBarItemManager: ObservableObject {
     private var sectionObservationPending = false
     private var nativeDrag: NativeDrag?
     private var pendingUserChanges = [MenuBarItemSectionStore.Identity: TimeInterval]()
+    private var pendingNativeDragIntents = MenuBarItemPendingSectionIntents()
     private var acceptNextLayout = false
+    private var sourcePIDResolutionTask: Task<Void, Never>?
+    private var sourcePIDRetryTask: Task<Void, Never>?
+    private var cacheRefreshTask: Task<Void, Never>?
 
     /// Context values for the current temporarily shown items.
     private var tempShownItemContexts = [TempShownItemContext]()
@@ -306,7 +334,7 @@ extension MenuBarItemManager {
         var tempShownItems = [(MenuBarItem, MoveDestination)]()
 
         for item in otherItems {
-            if let context = tempShownItemContexts.first(where: { $0.info == item.info }) {
+            if let context = tempShownItemContexts.first(where: { $0.matches(item) }) {
                 // Keep track of temporarily shown items and their return destinations separately.
                 // We want to cache them as if they were in their original locations. Once all other
                 // items are cached, use the return destinations to insert the items into the cache
@@ -334,7 +362,8 @@ extension MenuBarItemManager {
                 default:
                     if
                         let section = cache.section(for: targetItem),
-                        let index = cache[section].firstIndex(of: targetItem.info)
+                        let target = MenuBarItem.matching(targetItem, in: cache[section]),
+                        let index = cache[section].firstIndex(where: { $0.windowID == target.windowID })
                     {
                         let clampedIndex = index.clamped(to: cache[section].startIndex...cache[section].endIndex)
                         cache[section].insert(item, at: clampedIndex)
@@ -349,7 +378,8 @@ extension MenuBarItemManager {
                 default:
                     if
                         let section = cache.section(for: targetItem),
-                        let index = cache[section].firstIndex(of: targetItem.info)
+                        let target = MenuBarItem.matching(targetItem, in: cache[section]),
+                        let index = cache[section].firstIndex(where: { $0.windowID == target.windowID })
                     {
                         // Insert to the right of the target item. Since the array is
                         // ordered left-to-right, "right of" means the position after
@@ -360,7 +390,7 @@ extension MenuBarItemManager {
                 }
             }
             if cache.section(for: item) == nil,
-               let context = tempShownItemContexts.first(where: { $0.info == item.info }) {
+               let context = tempShownItemContexts.first(where: { $0.matches(item) }) {
                 // A neighboring app may have exited while this item was shown.
                 cache[MenuBarSection.Name(storedSection: context.originalSection)].append(item)
             }
@@ -396,26 +426,61 @@ extension MenuBarItemManager {
         }
 
         let now = ProcessInfo.processInfo.systemUptime
-        // The idle fast path avoids the much more expensive per-window space and
-        // description queries. Space changes explicitly invalidate the signature.
+        // Read all descriptions in one WindowServer call. Space changes
+        // explicitly invalidate the signature.
         let windowIDs = Bridging.getWindowList(option: .menuBarItems)
-        let signature = windowIDs.map {
-            WindowSignature(windowID: $0, frame: Bridging.getWindowFrame(for: $0))
+        let windows = WindowInfo.createWindows(from: windowIDs)
+        let sourcePIDCacheChanged =
+            MenuBarItemSourcePIDCache.shared.reconcile(
+                withFullSnapshot: windows
+            )
+        let signature = windows.map {
+            WindowSignature(windowID: $0.windowID, frame: $0.frame)
         }.sorted { $0.windowID < $1.windowID }
         let signatureChanged = signature != cachedWindowSignature
         let needsPeriodicRefresh = now - lastFullCacheDate >= 60
-        guard signatureChanged || sectionObservationPending || needsPeriodicRefresh else {
+        guard
+            signatureChanged || sourcePIDCacheChanged ||
+            sectionObservationPending || !pendingNativeDragIntents.isEmpty ||
+            needsPeriodicRefresh
+        else {
             logSkippingCache(reason: "item windows and frames have not changed")
             return
         }
         cachedWindowSignature = signature
         lastFullCacheDate = now
-        if signatureChanged {
+        if signatureChanged || sourcePIDCacheChanged {
             sectionObservationPending = sectionStore != nil
+            sourcePIDRetryTask?.cancel()
+            sourcePIDRetryTask = nil
         }
 
-        let activeWindowIDs = windowIDs.filter(Bridging.isWindowOnActiveSpace)
-        var items = MenuBarItem.getMenuBarItems(from: activeWindowIDs, excludeUntitled: true)
+        let activeDisplayID = Bridging.activeMenuBarDisplayID
+        let activeWindowIDs = if let activeDisplayID {
+            windowIDs.filter {
+                Bridging.isWindow($0, onCurrentSpaceOf: activeDisplayID)
+            }
+        } else {
+            windowIDs.filter(Bridging.isWindowOnActiveSpace)
+        }
+        scheduleSourcePIDResolution(
+            windows: windows,
+            requiredWindowIDs: Set(
+                windows.lazy.filter(\.isMenuBarItem).map(\.windowID)
+            )
+        )
+        // This unfiltered enumeration is the sole authority for provisional
+        // title ambiguity. Display/Space-filtered paths only query the policy.
+        let fullSnapshot = MenuBarItem.getMenuBarItems(from: windows)
+        guard updateSectionIdentities(fromFullSnapshot: fullSnapshot) else {
+            return
+        }
+        let activeWindowIDSet = Set(activeWindowIDs)
+        var items = MenuBarItem.getMenuBarItems(
+            from: windows.filter { activeWindowIDSet.contains($0.windowID) },
+            on: activeDisplayID,
+            excludeUntitled: true
+        )
         let allItems = items
 
         Logger.itemManager.debug(
@@ -430,8 +495,14 @@ extension MenuBarItemManager {
             )
         }
 
-        let hiddenControlItem = items.firstIndex(of: .hiddenControlItem).map { items.remove(at: $0) }
-        let alwaysHiddenControlItem = items.firstIndex(of: .alwaysHiddenControlItem).map { items.remove(at: $0) }
+        let hiddenControlItem = removeControlItem(
+            named: .hidden,
+            from: &items
+        )
+        let alwaysHiddenControlItem = removeControlItem(
+            named: .alwaysHidden,
+            from: &items
+        )
 
         guard let hiddenControlItem else {
             Logger.itemManager.warning("Missing control item for hidden section")
@@ -465,9 +536,90 @@ extension MenuBarItemManager {
     }
 
     private func scheduleCacheRefresh(after delay: Duration) {
-        Task { [weak self] in
-            try? await Task.sleep(for: delay)
+        cacheRefreshTask?.cancel()
+        cacheRefreshTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: delay)
+            } catch {
+                return
+            }
             await self?.cacheItemsIfNeeded()
+        }
+    }
+
+    private func removeControlItem(
+        named name: MenuBarSection.Name,
+        from items: inout [MenuBarItem]
+    ) -> MenuBarItem? {
+        let expectedInfo: MenuBarItemInfo = switch name {
+        case .visible: .iceIcon
+        case .hidden: .hiddenControlItem
+        case .alwaysHidden: .alwaysHiddenControlItem
+        }
+        if
+            let windowID = appState?.menuBarManager.section(withName: name)?
+                .controlItem.windowID,
+            let index = items.firstIndex(where: { $0.windowID == windowID })
+        {
+            return items.remove(at: index)
+        }
+
+        let matches = items.indices.filter { items[$0].info == expectedInfo }
+        guard matches.count == 1, let index = matches.first else {
+            if matches.count > 1 {
+                Logger.itemManager.warning(
+                    "Refusing ambiguous \(name.logString) control item title match"
+                )
+            }
+            return nil
+        }
+        return items.remove(at: index)
+    }
+
+    private func scheduleSourcePIDResolution(
+        windows: [WindowInfo],
+        requiredWindowIDs: Set<CGWindowID>
+    ) {
+        if #unavailable(macOS 26.0) {
+            return
+        }
+        guard
+            sourcePIDResolutionTask == nil,
+            MenuBarItemSourcePIDCache.shared.needsResolution(
+                for: requiredWindowIDs,
+                in: windows
+            )
+        else {
+            return
+        }
+
+        sourcePIDResolutionTask = Task { [weak self] in
+            let result = await MenuBarItemSourcePIDResolver.shared.resolve(
+                windows: windows,
+                requiredWindowIDs: requiredWindowIDs
+            )
+            guard let self else {
+                return
+            }
+            sourcePIDResolutionTask = nil
+            if result.changed {
+                cachedWindowSignature = nil
+                sectionObservationPending = sectionStore != nil
+                scheduleCacheRefresh(after: .milliseconds(100))
+            }
+            guard let retryDelay = result.retryDelay else {
+                return
+            }
+            sourcePIDRetryTask?.cancel()
+            sourcePIDRetryTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(retryDelay))
+                guard let self, !Task.isCancelled else {
+                    return
+                }
+                sourcePIDRetryTask = nil
+                cachedWindowSignature = nil
+                await cacheItemsIfNeeded()
+            }
         }
     }
 }
@@ -496,6 +648,38 @@ extension MenuBarItemManager {
         return nil
     }
 
+    /// Updates persistence identity state from an unfiltered menu bar snapshot.
+    private func updateSectionIdentities(
+        fromFullSnapshot items: [MenuBarItem]
+    ) -> Bool {
+        let identities = persistenceIdentityPolicy.update(
+            fromFullSnapshot: items
+        )
+        let now = ProcessInfo.processInfo.systemUptime
+        let resolutions = pendingNativeDragIntents.reconcile(
+            withFullSnapshot: items,
+            policy: persistenceIdentityPolicy,
+            now: now
+        )
+        do {
+            try sectionStore?.noteIdentities(identities)
+            let expiration = now + 10
+            for resolution in resolutions {
+                try sectionStore?.remember(
+                    resolution.identity,
+                    in: resolution.section
+                )
+                pendingUserChanges[resolution.identity] = expiration
+                pendingNativeDragIntents.finish(windowID: resolution.windowID)
+            }
+            return true
+        } catch {
+            Logger.itemManager.error("Could not update menu bar persistence identities: \(error)")
+            return false
+        }
+    }
+
+    /// Callers note identities before filtering so excluded siblings still block matching titles.
     private func sectionObservations(in items: [MenuBarItem]) -> [MenuBarItemSectionStore.Item]? {
         let hidden = items.filter { $0.info == .hiddenControlItem }
         let alwaysHidden = items.filter { $0.info == .alwaysHiddenControlItem }
@@ -504,12 +688,14 @@ extension MenuBarItemManager {
             hidden.count == 1,
             alwaysHidden.count == (expectsAlwaysHidden ? 1 : 0),
             let h = hidden.first,
-            h.frame.height > 0
+            h.frame.height > 0,
+            h.frame.minX != -1
         else {
             return nil
         }
         if let ah = alwaysHidden.first {
-            guard ah.frame.maxX <= h.frame.minX,
+            guard ah.frame.minX != -1,
+                  ah.frame.maxX <= h.frame.minX,
                   ah.frame.minY < h.frame.maxY, ah.frame.maxY > h.frame.minY else {
                 return nil
             }
@@ -517,10 +703,11 @@ extension MenuBarItemManager {
         let predicates = Predicates.sectionPredicates(hiddenControlItem: h, alwaysHiddenControlItem: alwaysHidden.first)
         var observations = [MenuBarItemSectionStore.Item]()
         for item in items {
-            guard let identity = item.sectionIdentity else {
+            guard let identity = persistenceIdentityPolicy.eligibleIdentity(for: item) else {
                 continue
             }
             guard
+                item.frame.minX != -1,
                 item.frame.width > 0, item.frame.height > 0,
                 item.frame.minY < h.frame.maxY, item.frame.maxY > h.frame.minY
             else {
@@ -539,7 +726,7 @@ extension MenuBarItemManager {
             observations.append(.init(
                 identity: identity,
                 windowID: item.windowID,
-                processID: item.ownerPID,
+                processID: item.sourcePID ?? item.ownerPID,
                 section: section
             ))
         }
@@ -599,6 +786,7 @@ extension MenuBarItemManager {
             guard
                 let restore = observation.restore,
                 let item = items.first(where: { $0.windowID == restore.item.windowID }),
+                !pendingNativeDragIntents.contains(item),
                 let destination = sectionDestination(restore.section, in: items)
             else {
                 return
@@ -634,16 +822,25 @@ extension MenuBarItemManager {
         guard !isRestoringSection, !isPerformingUserMove, !isTemporarilyShowingItem, !isMovingItem else {
             throw EventError(code: .couldNotComplete, item: item)
         }
+        guard !persistenceIdentityPolicy.isAwaitingStableIdentity(item) else {
+            throw EventError(code: .couldNotComplete, item: item)
+        }
+        guard
+            item.isMovable,
+            persistenceIdentityPolicy.eligibleIdentity(for: item) != nil
+        else {
+            throw EventError(code: .notMovable, item: item)
+        }
         isPerformingUserMove = true
         defer {
             isPerformingUserMove = false
             deferSectionRestoration()
         }
         try await slowMove(item: item, to: destination)
-        removeTempShownItemFromCache(with: item.info)
+        removeTempShownItemFromCache(matching: item)
         let currentItems = MenuBarItem.getMenuBarItems(onScreenOnly: false, activeSpaceOnly: true)
-        if let identity = currentItems.first(where: { $0.windowID == item.windowID })?.sectionIdentity,
-           currentItems.filter({ $0.sectionIdentity == identity }).count == 1 {
+        if let currentItem = MenuBarItem.exactlyMatching(item, in: currentItems),
+           let identity = persistenceIdentityPolicy.eligibleIdentity(for: currentItem) {
             do {
                 try sectionStore?.remember(identity, in: section.storedSection)
             } catch {
@@ -662,7 +859,14 @@ extension MenuBarItemManager {
         else {
             return
         }
-        nativeDrag = NativeDrag(item: item, initialPlacements: placements, didDrag: false)
+        nativeDrag = NativeDrag(
+            item: item,
+            initialSection: physicalSection(of: item, in: items),
+            wasAwaitingStableIdentity: persistenceIdentityPolicy
+                .isAwaitingStableIdentity(item),
+            initialPlacements: placements,
+            didDrag: false
+        )
     }
 
     func updateUserDrag() {
@@ -671,7 +875,7 @@ extension MenuBarItemManager {
         }
         nativeDrag?.didDrag = true
         if let item = nativeDrag?.item {
-            removeTempShownItemFromCache(with: item.info)
+            removeTempShownItemFromCache(matching: item)
         }
     }
 
@@ -686,7 +890,11 @@ extension MenuBarItemManager {
         Task {
             try? await Task.sleep(for: .milliseconds(200))
             let items = MenuBarItem.getMenuBarItems(onScreenOnly: false, activeSpaceOnly: true)
-            guard let currentPlacements = sectionPlacements(in: items) else {
+            guard
+                let currentItem = MenuBarItem.exactlyMatching(drag.item, in: items),
+                let currentSection = physicalSection(of: currentItem, in: items),
+                let currentPlacements = sectionPlacements(in: items)
+            else {
                 return
             }
             if drag.item.info == .hiddenControlItem || drag.item.info == .alwaysHiddenControlItem {
@@ -702,7 +910,23 @@ extension MenuBarItemManager {
                 }
                 acceptNextLayout = true
             } else {
-                guard let identity = drag.item.sectionIdentity else {
+                guard drag.initialSection != currentSection else {
+                    return
+                }
+                if drag.wasAwaitingStableIdentity {
+                    pendingNativeDragIntents.record(
+                        postDragItem: currentItem,
+                        section: currentSection,
+                        now: ProcessInfo.processInfo.systemUptime
+                    )
+                    layoutReadyDate = ProcessInfo.processInfo.systemUptime
+                    cachedWindowSignature = nil
+                    sectionObservationPending = sectionStore != nil
+                    sectionStore?.invalidateSnapshot()
+                    await cacheItemsIfNeeded()
+                    return
+                }
+                guard let identity = persistenceIdentityPolicy.eligibleIdentity(for: currentItem) else {
                     return
                 }
                 let initial = drag.initialPlacements.filter {
@@ -712,8 +936,7 @@ extension MenuBarItemManager {
                     $0.identity == identity && $0.windowID == drag.item.windowID
                 }
                 guard
-                    initial.count == 1, current.count == 1,
-                    initial.first?.section != current.first?.section
+                    initial.count == 1, current.count == 1
                 else {
                     return
                 }
@@ -727,20 +950,6 @@ extension MenuBarItemManager {
             try? await Task.sleep(for: .milliseconds(1200))
             await cacheItemsIfNeeded()
         }
-    }
-}
-
-private extension MenuBarItem {
-    var sectionIdentity: MenuBarItemSectionStore.Identity? {
-        guard
-            isMovable, canBeHidden,
-            info.namespace != .ice, info.namespace != .special,
-            let namespace = info.namespace.optional,
-            !namespace.rawValue.isEmpty, !info.title.isEmpty
-        else {
-            return nil
-        }
-        return .init(bundleIdentifier: namespace.rawValue, title: info.title)
     }
 }
 
@@ -940,6 +1149,15 @@ extension MenuBarItemManager {
                 "right of \(item.logString)"
             }
         }
+
+        func replacingTarget(with item: MenuBarItem) -> MoveDestination {
+            switch self {
+            case .leftOfItem:
+                .leftOfItem(item)
+            case .rightOfItem:
+                .rightOfItem(item)
+            }
+        }
     }
 
     /// Returns the current frame for the given item.
@@ -956,18 +1174,12 @@ extension MenuBarItemManager {
     /// Returns the end point for moving an item to the given destination.
     ///
     /// - Parameter destination: The destination to return the end point for.
-    private func getEndPoint(for destination: MoveDestination) throws -> CGPoint {
+    private func getEndPoint(for destination: MoveDestination) -> CGPoint {
         switch destination {
         case .leftOfItem(let targetItem):
-            guard let currentFrame = getCurrentFrame(for: targetItem) else {
-                throw EventError(code: .invalidItem, item: targetItem)
-            }
-            return CGPoint(x: currentFrame.minX, y: currentFrame.midY)
+            return CGPoint(x: targetItem.frame.minX, y: targetItem.frame.midY)
         case .rightOfItem(let targetItem):
-            guard let currentFrame = getCurrentFrame(for: targetItem) else {
-                throw EventError(code: .invalidItem, item: targetItem)
-            }
-            return CGPoint(x: currentFrame.maxX, y: currentFrame.midY)
+            return CGPoint(x: targetItem.frame.maxX, y: targetItem.frame.midY)
         }
     }
 
@@ -975,11 +1187,8 @@ extension MenuBarItemManager {
     /// position if a move fails.
     ///
     /// - Parameter item: The item to return the fallback point for.
-    private func getFallbackPoint(for item: MenuBarItem) throws -> CGPoint {
-        guard let currentFrame = getCurrentFrame(for: item) else {
-            throw EventError(code: .invalidItem, item: item)
-        }
-        return CGPoint(x: currentFrame.midX, y: currentFrame.midY)
+    private func getFallbackPoint(for item: MenuBarItem) -> CGPoint {
+        CGPoint(x: item.frame.midX, y: item.frame.midY)
     }
 
     /// Returns the target item for the given destination.
@@ -997,21 +1206,57 @@ extension MenuBarItemManager {
     /// - Parameters:
     ///   - item: The item to check the position of.
     ///   - destination: The destination to compare the item's position against.
-    private func itemHasCorrectPosition(item: MenuBarItem, for destination: MoveDestination) throws -> Bool {
-        guard let currentFrame = getCurrentFrame(for: item) else {
-            throw EventError(code: .invalidItem, item: item)
-        }
+    private func itemHasCorrectPosition(item: MenuBarItem, for destination: MoveDestination) -> Bool {
         switch destination {
         case .leftOfItem(let targetItem):
-            guard let currentTargetFrame = getCurrentFrame(for: targetItem) else {
-                throw EventError(code: .invalidItem, item: targetItem)
-            }
-            return currentFrame.maxX == currentTargetFrame.minX
+            return item.frame.maxX == targetItem.frame.minX
         case .rightOfItem(let targetItem):
-            guard let currentTargetFrame = getCurrentFrame(for: targetItem) else {
-                throw EventError(code: .invalidItem, item: targetItem)
-            }
-            return currentFrame.minX == currentTargetFrame.maxX
+            return item.frame.minX == targetItem.frame.maxX
+        }
+    }
+
+    private func refreshedMoveEndpoints(
+        item: MenuBarItem,
+        destination: MoveDestination
+    ) -> (item: MenuBarItem, destination: MoveDestination)? {
+        let target = getTargetItem(for: destination)
+        let windows = WindowInfo.createWindows(
+            from: [item.windowID, target.windowID]
+        )
+        guard
+            let endpoints = MenuBarItem.operationEndpoints(
+                item: item,
+                target: target,
+                in: windows
+            ),
+            isUsableMoveFrame(endpoints.item.frame),
+            isUsableMoveFrame(endpoints.target.frame)
+        else {
+            return nil
+        }
+        return (
+            endpoints.item,
+            destination.replacingTarget(with: endpoints.target)
+        )
+    }
+
+    private func isUsableMoveFrame(_ frame: CGRect) -> Bool {
+        frame.minX != -1 &&
+            frame.width > 0 && frame.height > 0 &&
+            frame.minX.isFinite && frame.minY.isFinite &&
+            frame.maxX.isFinite && frame.maxY.isFinite
+    }
+
+    private func moveFailureKind(for error: any Error) -> MenuBarItemMoveFailureKind {
+        guard let eventError = error as? EventError else {
+            return .terminal
+        }
+        return switch eventError.code {
+        case .couldNotComplete, .eventOperationTimeout, .frameCheckTimeout, .otherTimeout:
+            .noResponse
+        case .eventCreationFailure, .invalidAppState, .invalidEventSource,
+            .invalidCursorLocation, .invalidItem, .notMovable:
+            .terminal
         }
     }
 
@@ -1296,14 +1541,15 @@ extension MenuBarItemManager {
 
     /// Tries to wake up the given item if it is not responding to events.
     private func wakeUpItem(_ item: MenuBarItem) async throws {
+        guard item.isMovable else {
+            throw EventError(code: .notMovable, item: item)
+        }
         Logger.itemManager.debug("Attempting to wake up \(item.logString)")
 
         guard let source = CGEventSource(stateID: .hidSystemState) else {
             throw EventError(code: .invalidEventSource, item: item)
         }
-        guard let currentFrame = getCurrentFrame(for: item) else {
-            throw EventError(code: .invalidItem, item: item)
-        }
+        let currentFrame = item.frame
 
         guard
             let mouseDownEvent = CGEvent.menuBarItemEvent(
@@ -1361,8 +1607,8 @@ extension MenuBarItemManager {
         }
 
         let startPoint = CGPoint(x: 20_000, y: 20_000)
-        let endPoint = try getEndPoint(for: destination)
-        let fallbackPoint = try getFallbackPoint(for: item)
+        let endPoint = getEndPoint(for: destination)
+        let fallbackPoint = getFallbackPoint(for: item)
         let targetItem = getTargetItem(for: destination)
 
         guard
@@ -1438,8 +1684,22 @@ extension MenuBarItemManager {
     ///   - item: A menu bar item to move.
     ///   - destination: A destination to move the menu bar item.
     func move(item: MenuBarItem, to destination: MoveDestination, maxAttempts: Int = 5) async throws {
-        if try itemHasCorrectPosition(item: item, for: destination) {
-            Logger.itemManager.debug("\(item.logString) is already in the correct position")
+        guard let initialEndpoints = refreshedMoveEndpoints(
+            item: item,
+            destination: destination
+        ) else {
+            throw EventError(code: .invalidItem, item: item)
+        }
+        guard initialEndpoints.item.isMovable else {
+            throw EventError(code: .notMovable, item: initialEndpoints.item)
+        }
+        if itemHasCorrectPosition(
+            item: initialEndpoints.item,
+            for: initialEndpoints.destination
+        ) {
+            Logger.itemManager.debug(
+                "\(initialEndpoints.item.logString) is already in the correct position"
+            )
             return
         }
 
@@ -1460,10 +1720,6 @@ extension MenuBarItemManager {
         guard let cursorLocation = MouseCursor.location(in: .coreGraphics) else {
             throw EventError(code: .invalidCursorLocation, item: item)
         }
-        guard let initialFrame = getCurrentFrame(for: item) else {
-            throw EventError(code: .invalidItem, item: item)
-        }
-
         appState.eventManager.stopAll()
         defer {
             appState.eventManager.startAll()
@@ -1479,22 +1735,68 @@ extension MenuBarItemManager {
         // Automatic restoration uses one attempt and must not click to wake an item.
         let attemptLimit = max(1, maxAttempts)
         for n in 1...attemptLimit {
+            guard let endpoints = refreshedMoveEndpoints(
+                item: item,
+                destination: destination
+            ) else {
+                throw EventError(code: .invalidItem, item: item)
+            }
+            guard endpoints.item.isMovable else {
+                throw EventError(code: .notMovable, item: endpoints.item)
+            }
+            if itemHasCorrectPosition(
+                item: endpoints.item,
+                for: endpoints.destination
+            ) {
+                Logger.itemManager.info("Successfully moved \(endpoints.item.logString)")
+                return
+            }
             do {
-                try await moveItemWithoutRestoringMouseLocation(item, to: destination)
-                guard let newFrame = getCurrentFrame(for: item) else {
+                try await moveItemWithoutRestoringMouseLocation(
+                    endpoints.item,
+                    to: endpoints.destination
+                )
+                guard let current = refreshedMoveEndpoints(
+                    item: item,
+                    destination: destination
+                ) else {
                     throw EventError(code: .invalidItem, item: item)
                 }
-                if newFrame != initialFrame {
-                    Logger.itemManager.info("Successfully moved \(item.logString)")
-                    break
-                } else {
+                guard itemHasCorrectPosition(
+                    item: current.item,
+                    for: current.destination
+                ) else {
                     throw EventError(code: .couldNotComplete, item: item)
                 }
-            } catch where n < attemptLimit {
+                Logger.itemManager.info("Successfully moved \(current.item.logString)")
+                return
+            } catch {
                 Logger.itemManager.warning("Attempt \(n) to move \(item.logString) failed (error: \(error))")
-                try await wakeUpItem(item)
+                guard
+                    let current = refreshedMoveEndpoints(
+                        item: item,
+                        destination: destination
+                    )
+                else {
+                    throw EventError(code: .invalidItem, item: item)
+                }
+                if itemHasCorrectPosition(
+                    item: current.item,
+                    for: current.destination
+                ) {
+                    Logger.itemManager.info("Successfully moved \(current.item.logString)")
+                    return
+                }
+                let failure = moveFailureKind(for: error)
+                guard MenuBarItemMoveRetryPolicy.shouldWake(
+                    item: current.item,
+                    failure: failure,
+                    attemptsRemain: n < attemptLimit
+                ) else {
+                    throw error
+                }
+                try await wakeUpItem(current.item)
                 Logger.itemManager.info("Retrying move of \(item.logString)")
-                continue
             }
         }
     }
@@ -1520,7 +1822,16 @@ extension MenuBarItemManager {
         let waitTask = Task(timeout: timeout) {
             while true {
                 try Task.checkCancellation()
-                if try await self.itemHasCorrectPosition(item: item, for: destination) {
+                guard let endpoints = await self.refreshedMoveEndpoints(
+                    item: item,
+                    destination: destination
+                ) else {
+                    throw EventError(code: .invalidItem, item: item)
+                }
+                if await self.itemHasCorrectPosition(
+                    item: endpoints.item,
+                    for: endpoints.destination
+                ) {
                     return
                 }
                 try await Task.sleep(for: .milliseconds(10))
@@ -1685,11 +1996,12 @@ extension MenuBarItemManager {
         mouseButton: CGMouseButton
     ) {
         guard !isRestoringSection, !isPerformingUserMove, !isTemporarilyShowingItem,
-              !isMovingItem, nativeDrag == nil else {
+              !isMovingItem, nativeDrag == nil, item.isMovable, item.canBeHidden else {
             return
         }
         if
             let latest = MenuBarItem(windowID: item.windowID),
+            item.isSameWindow(as: latest),
             latest.isOnScreen
         {
             if clickWhenFinished {
@@ -1706,7 +2018,11 @@ extension MenuBarItemManager {
 
         guard
             let appState,
-            let screen = NSScreen.main,
+            let screen = NSScreen.screenWithActiveMenuBar ??
+            NSScreen.screens.first(where: {
+                let bounds = CGDisplayBounds($0.displayID)
+                return (bounds.minY ... bounds.maxY).contains(item.frame.midY)
+            }) ?? NSScreen.main,
             let applicationMenuFrame = appState.menuBarManager.getApplicationMenuFrame(for: screen.displayID)
         else {
             Logger.itemManager.warning("No application menu frame, so not showing \(item.logString)")
@@ -1715,21 +2031,26 @@ extension MenuBarItemManager {
 
         Logger.itemManager.info("Temporarily showing \(item.logString)")
 
-        var items = MenuBarItem.getMenuBarItems(onScreenOnly: false, activeSpaceOnly: true)
+        var items = MenuBarItem.getMenuBarItems(
+            on: screen.displayID,
+            onScreenOnly: false,
+            activeSpaceOnly: true
+        )
 
         guard
-            !tempShownItemContexts.contains(where: { $0.info == item.info }),
+            !tempShownItemContexts.contains(where: { $0.matches(item) }),
             items.contains(where: { $0.info == .hiddenControlItem }),
             let destination = getReturnDestination(for: item, in: items),
-            let currentItem = items.first(where: { $0.windowID == item.windowID }),
+            let currentItem = MenuBarItem.exactlyMatching(item, in: items),
             let currentSection = physicalSection(of: currentItem, in: items)
         else {
             Logger.itemManager.warning("No return destination for \(item.logString)")
             return
         }
-        let identity = currentItem.sectionIdentity
-        let canRemember = identity != nil && items.filter { $0.sectionIdentity == identity }.count == 1
-        let originalSection = identity.flatMap { sectionStore?.section(for: $0) } ?? currentSection
+        let identity = persistenceIdentityPolicy.eligibleIdentity(for: currentItem)
+        let originalSection = identity.flatMap {
+            sectionStore?.section(for: $0)
+        } ?? currentSection
 
         // Remove all items up to the hidden control item.
         items.trimPrefix { $0.info != .hiddenControlItem }
@@ -1755,7 +2076,7 @@ extension MenuBarItemManager {
         }
 
         let initialWindows = WindowInfo.getOnScreenWindows()
-        if canRemember, let identity {
+        if let identity {
             do {
                 // Survives Ice or the other app quitting before the item is returned.
                 // A pending restore must keep its saved section, not the drifted one.
@@ -1765,7 +2086,14 @@ extension MenuBarItemManager {
             }
         }
         tempShownItemContexts.append(TempShownItemContext(
-            info: item.info,
+            item: currentItem,
+            interfacePIDs: Set(
+                [currentItem.ownerPID, currentItem.sourcePID].compactMap(\.self)
+            ),
+            preexistingInterfaceWindowIDs: Set(
+                initialWindows.map(\.windowID)
+            ),
+            displayID: screen.displayID,
             returnDestination: destination,
             originalSection: originalSection,
             shownInterfaceWindow: nil
@@ -1795,15 +2123,25 @@ extension MenuBarItemManager {
             try? await Task.sleep(for: .milliseconds(100))
 
             let currentWindows = WindowInfo.getOnScreenWindows()
+            let latestItem = MenuBarItem(windowID: item.windowID)
+            let interfacePIDs = Set(
+                [
+                    currentItem.ownerPID,
+                    currentItem.sourcePID,
+                    latestItem?.ownerPID,
+                    latestItem?.sourcePID,
+                ].compactMap(\.self)
+            )
+            let shownInterfaceWindow = MenuBarItem.firstInterfaceWindow(
+                in: currentWindows,
+                ownedBy: interfacePIDs,
+                excluding: Set(initialWindows.map(\.windowID))
+            )
 
-            let shownInterfaceWindow = currentWindows.first { currentWindow in
-                currentWindow.ownerPID == item.ownerPID &&
-                !initialWindows.contains { initialWindow in
-                    currentWindow.windowID == initialWindow.windowID
-                }
-            }
-
-            if let index = tempShownItemContexts.firstIndex(where: { $0.info == item.info }) {
+            if let index = tempShownItemContexts.firstIndex(where: { $0.matches(item) }) {
+                tempShownItemContexts[index].interfacePIDs.formUnion(
+                    interfacePIDs
+                )
                 tempShownItemContexts[index].shownInterfaceWindow = shownInterfaceWindow
             }
             runTempShownItemTimer(for: appState.settingsManager.advancedSettingsManager.tempShowInterval)
@@ -1846,16 +2184,57 @@ extension MenuBarItemManager {
         var failedContexts = [TempShownItemContext]()
 
         while let context = tempShownItemContexts.popLast() {
-            let items = MenuBarItem.getMenuBarItems(onScreenOnly: false, activeSpaceOnly: true)
-            guard let item = items.first(where: { $0.info == context.info }) else {
+            let globalItems = MenuBarItem.getMenuBarItems(
+                onScreenOnly: false,
+                activeSpaceOnly: false
+            )
+            guard
+                let globalItem = MenuBarItem.exactlyMatching(
+                    context.item,
+                    in: globalItems
+                )
+            else {
+                continue
+            }
+
+            var candidateDisplayIDs = NSScreen.screens.compactMap { screen in
+                CGDisplayBounds(screen.displayID).intersects(globalItem.frame) ?
+                    screen.displayID : nil
+            }
+            if !candidateDisplayIDs.contains(context.displayID) {
+                candidateDisplayIDs.append(context.displayID)
+            }
+            for displayID in NSScreen.screens.map(\.displayID)
+                where !candidateDisplayIDs.contains(displayID) {
+                candidateDisplayIDs.append(displayID)
+            }
+
+            var liveItem: MenuBarItem?
+            var destination: MoveDestination?
+            for displayID in candidateDisplayIDs {
+                let items = MenuBarItem.getMenuBarItems(
+                    on: displayID,
+                    onScreenOnly: false,
+                    activeSpaceOnly: true
+                )
+                guard
+                    let item = MenuBarItem.exactlyMatching(context.item, in: items),
+                    let resolvedDestination = resolvedReturnDestination(
+                        context,
+                        in: items
+                    )
+                else {
+                    continue
+                }
+                liveItem = item
+                destination = resolvedDestination
+                break
+            }
+            guard let item = liveItem, let destination else {
+                failedContexts.append(context)
                 continue
             }
             do {
-                let destination = resolvedReturnDestination(context, in: items)
-                guard let destination else {
-                    failedContexts.append(context)
-                    continue
-                }
                 try await slowMove(item: item, to: destination)
             } catch {
                 Logger.itemManager.error("Failed to rehide \(item.logString) (error: \(error))")
@@ -1874,9 +2253,9 @@ extension MenuBarItemManager {
     }
 
     private func resolvedReturnDestination(_ context: TempShownItemContext, in items: [MenuBarItem]) -> MoveDestination? {
-        let targetInfo = getTargetItem(for: context.returnDestination).info
-        let targets = items.filter { $0.info == targetInfo }
-        if targets.count == 1, let target = targets.first,
+        let targetItem = getTargetItem(for: context.returnDestination)
+        let target = MenuBarItem.matching(targetItem, in: items)
+        if let target,
            physicalSection(of: target, in: items) == context.originalSection {
             switch context.returnDestination {
             case .leftOfItem: return .leftOfItem(target)
@@ -1894,8 +2273,8 @@ extension MenuBarItemManager {
     /// Removes a temporarily shown item from the cache.
     ///
     /// This ensures that the item will _not_ be returned to its previous location.
-    func removeTempShownItemFromCache(with info: MenuBarItemInfo) {
-        tempShownItemContexts.removeAll { $0.info == info }
+    func removeTempShownItemFromCache(matching item: MenuBarItem) {
+        tempShownItemContexts.removeAll { $0.matches(item) }
     }
 }
 
